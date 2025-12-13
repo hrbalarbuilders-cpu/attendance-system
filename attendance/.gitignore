@@ -1,0 +1,26 @@
+# Flutter
+.dart_tool/
+.build/
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+.metadata
+.pub-cache/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# PHP
+attendance_api/config/config.php
+admin/config/config.php
+attendance_api/uploads/
+admin/uploads/
+
+# Environment
+.env
