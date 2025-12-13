@@ -69,7 +69,8 @@ class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
 
   // BACKEND CONFIG
-  static const String baseUrl = "http://10.218.135.51/attendance_api";
+  static const String baseUrl =
+      "http://192.168.1.103:8080/attendance-system/attendance/attendance_api";
 
   @override
   void dispose() {
@@ -87,7 +88,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
     try {
       final conn = await Connectivity().checkConnectivity();
-      if (conn == ConnectivityResult.none) {
+      if (conn.contains(ConnectivityResult.none) || conn.isEmpty) {
         setState(() => _isLoading = false);
         _showSnack("No internet connection. Please connect to internet.");
         return;
@@ -164,7 +165,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       shape: BoxShape.circle,
                       boxShadow: [
                         BoxShadow(
-                          color: const Color(0xFF6366F1).withOpacity(0.3),
+                          color: const Color(0xFF6366F1).withValues(alpha: 0.3),
                           blurRadius: 20,
                           offset: const Offset(0, 10),
                         ),
@@ -349,7 +350,8 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   List<Map<String, dynamic>> todayLogs = []; // All attendance logs for today
 
   // BACKEND CONFIG
-  static const String baseUrl = "http://10.218.135.51/attendance_api";
+  static const String baseUrl =
+      "http://192.168.1.103:8080/attendance-system/attendance/attendance_api";
 
   int userId = 1; // Will be loaded from SharedPreferences
   String userName = "User"; // User name
@@ -384,9 +386,9 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
       }
     });
 
-    // Start timer for real-time progress updates (every 10 seconds for smoother updates)
+    // Start timer for real-time progress updates (every 30 seconds)
     // Timer updates UI when clocked in - always call setState and let progress calculation handle it
-    _progressTimer = Timer.periodic(const Duration(seconds: 10), (timer) {
+    _progressTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
       if (mounted) {
         // Update UI to reflect real-time progress (progress calculation will handle clock in/out state)
         setState(() {});
@@ -915,7 +917,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   Future<void> _fetchTodayAttendance() async {
     try {
       final conn = await Connectivity().checkConnectivity();
-      if (conn == ConnectivityResult.none) return;
+      if (conn.contains(ConnectivityResult.none) || conn.isEmpty) return;
 
       final todayStr = DateTime.now().toIso8601String().substring(
         0,
@@ -989,7 +991,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   Future<void> _fetchUserShift() async {
     try {
       final conn = await Connectivity().checkConnectivity();
-      if (conn == ConnectivityResult.none) return;
+      if (conn.contains(ConnectivityResult.none) || conn.isEmpty) return;
 
       final res = await http.get(
         Uri.parse("$baseUrl/get_user_shift.php?user_id=$userId"),
@@ -1058,7 +1060,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   Future<void> _fetchOfficeLocation() async {
     try {
       final conn = await Connectivity().checkConnectivity();
-      if (conn == ConnectivityResult.none) return;
+      if (conn.contains(ConnectivityResult.none) || conn.isEmpty) return;
 
       final res = await http.get(Uri.parse("$baseUrl/get_office_location.php"));
 
@@ -1114,17 +1116,202 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     return "$dayName, ${now.day.toString().padLeft(2, '0')} ${months[now.month - 1]}";
   }
 
-  double _shiftProgress() {
-    // If clocked out, show 100%
-    if (clockOutTime != null) return 1.0;
+  // Calculate progress segments for visual display
+  // Blue starts from shift start, pauses at lunch out, resumes after lunch in
+  Map<String, double> _getProgressSegments() {
+    final isOnLunchBreak = clockOutTime != null && lastPunchReason == 'lunch';
 
-    // If clocked in but shift times not available, show minimum progress
-    if (clockInTime != null && clockOutTime == null) {
+    if (shiftStartTime == null ||
+        shiftStartTime!.isEmpty ||
+        shiftEndTime == null ||
+        shiftEndTime!.isEmpty ||
+        clockInTime == null) {
+      return {'beforeLunch': 0.0, 'lunch': 0.0, 'afterLunch': 0.0};
+    }
+
+    try {
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+      final startParts = shiftStartTime!.split(':');
+      final endParts = shiftEndTime!.split(':');
+
+      if (startParts.length < 2 || endParts.length < 2) {
+        return {'beforeLunch': 0.0, 'lunch': 0.0, 'afterLunch': 0.0};
+      }
+
+      final startHour = int.parse(startParts[0]);
+      final startMin = int.parse(startParts[1]);
+      final endHour = int.parse(endParts[0]);
+      final endMin = int.parse(endParts[1]);
+      final shiftStart = today.add(
+        Duration(hours: startHour, minutes: startMin),
+      );
+      final shiftEnd = today.add(Duration(hours: endHour, minutes: endMin));
+      final totalShiftMinutes = shiftEnd.difference(shiftStart).inMinutes;
+
+      // Parse clock-in time
+      final clockInParts = clockInTime!.split(':');
+      if (clockInParts.length < 2) {
+        return {'beforeLunch': 0.0, 'lunch': 0.0, 'afterLunch': 0.0};
+      }
+      final clockInHour = int.parse(clockInParts[0]);
+      final clockInMin = int.parse(clockInParts[1]);
+      final clockInDateTime = today.add(
+        Duration(hours: clockInHour, minutes: clockInMin),
+      );
+
+      // Find lunch break in logs
+      DateTime? lunchOutTime;
+      DateTime? lunchInTime;
+      for (int i = 0; i < todayLogs.length; i++) {
+        if (todayLogs[i]['type'] == 'out' &&
+            todayLogs[i]['reason'] == 'lunch' &&
+            i < todayLogs.length - 1 &&
+            todayLogs[i + 1]['type'] == 'in') {
+          try {
+            lunchOutTime = DateTime.parse(todayLogs[i]['time']);
+            lunchInTime = DateTime.parse(todayLogs[i + 1]['time']);
+            break;
+          } catch (e) {
+            // Skip invalid times
+          }
+        }
+      }
+
+      double beforeLunchProgress = 0.0;
+      double lunchProgress = 0.0;
+      double afterLunchProgress = 0.0;
+
+      // Progress starts from shift start time (not clock-in)
+      // Blue segment represents elapsed time from shift start, updates in real-time
+      if (lunchOutTime != null && lunchInTime != null) {
+        // Has lunch break
+
+        // Blue segment: Time from shift start to lunch out (frozen at lunch out)
+        // Only show progress if clocked in before or at lunch out
+        if (clockInDateTime.isBefore(lunchOutTime) ||
+            clockInDateTime.isAtSameMomentAs(lunchOutTime)) {
+          final elapsedToLunchOut = lunchOutTime
+              .difference(shiftStart)
+              .inMinutes;
+          if (elapsedToLunchOut > 0) {
+            beforeLunchProgress = elapsedToLunchOut / totalShiftMinutes;
+          }
+        }
+
+        // Yellow segment: Lunch break - grows in real-time from lunch out to now (if still on lunch) or lunch in (if lunch ended)
+        if (isOnLunchBreak) {
+          // Still on lunch break - yellow grows from lunch out to now
+          final lunchElapsed = now.difference(lunchOutTime).inMinutes;
+          if (lunchElapsed > 0) {
+            lunchProgress = lunchElapsed / totalShiftMinutes;
+          }
+        } else {
+          // Lunch ended - yellow is frozen at lunch duration
+          final lunchDuration = lunchInTime.difference(lunchOutTime).inMinutes;
+          if (lunchDuration > 0) {
+            lunchProgress = lunchDuration / totalShiftMinutes;
+          }
+        }
+
+        // Blue segment: Work after lunch - grows in real-time from lunch in to now
+        if (isOnLunchBreak) {
+          // On lunch break - no work after lunch yet
+          afterLunchProgress = 0.0;
+        } else if (clockOutTime != null && lastPunchReason != 'lunch') {
+          // Shift ended - blue after lunch is frozen at clock out
+          final clockOutParts = clockOutTime!.split(':');
+          if (clockOutParts.length >= 2) {
+            final clockOutHour = int.parse(clockOutParts[0]);
+            final clockOutMin = int.parse(clockOutParts[1]);
+            final clockOutDateTime = today.add(
+              Duration(hours: clockOutHour, minutes: clockOutMin),
+            );
+            final elapsedAfterLunch = clockOutDateTime
+                .difference(lunchInTime)
+                .inMinutes;
+            if (elapsedAfterLunch > 0) {
+              afterLunchProgress = elapsedAfterLunch / totalShiftMinutes;
+            }
+          }
+        } else {
+          // Still working after lunch - blue grows in real-time from lunch in to now
+          final elapsedAfterLunch = now.difference(lunchInTime).inMinutes;
+          if (elapsedAfterLunch > 0) {
+            afterLunchProgress = elapsedAfterLunch / totalShiftMinutes;
+          }
+        }
+      } else {
+        // No lunch break - only blue segment fills from shift start
+        if (isOnLunchBreak && clockOutTime != null) {
+          // On lunch break but not in logs yet - blue frozen at clock out, yellow grows
+          final clockOutParts = clockOutTime!.split(':');
+          if (clockOutParts.length >= 2) {
+            final clockOutHour = int.parse(clockOutParts[0]);
+            final clockOutMin = int.parse(clockOutParts[1]);
+            final clockOutDateTime = today.add(
+              Duration(hours: clockOutHour, minutes: clockOutMin),
+            );
+            // Blue frozen at clock out
+            if (clockInDateTime.isBefore(clockOutDateTime) ||
+                clockInDateTime.isAtSameMomentAs(clockOutDateTime)) {
+              final elapsedToClockOut = clockOutDateTime
+                  .difference(shiftStart)
+                  .inMinutes;
+              if (elapsedToClockOut >= 0) {
+                beforeLunchProgress = elapsedToClockOut / totalShiftMinutes;
+              }
+            }
+            // Yellow grows from clock out to now
+            final lunchElapsed = now.difference(clockOutDateTime).inMinutes;
+            if (lunchElapsed > 0) {
+              lunchProgress = lunchElapsed / totalShiftMinutes;
+            }
+          }
+        } else {
+          // No lunch - blue grows in real-time from shift start to now
+          // Progress based on shift start, only if clocked in
+          if (clockInDateTime.isBefore(now) ||
+              clockInDateTime.isAtSameMomentAs(now)) {
+            final elapsedMinutes = now.difference(shiftStart).inMinutes;
+            if (elapsedMinutes >= 0) {
+              beforeLunchProgress = elapsedMinutes / totalShiftMinutes;
+            }
+          }
+        }
+      }
+
+      // Ensure values are within bounds
+      beforeLunchProgress = beforeLunchProgress.clamp(0.0, 1.0);
+      lunchProgress = lunchProgress.clamp(0.0, 1.0);
+      afterLunchProgress = afterLunchProgress.clamp(0.0, 1.0);
+
+      return {
+        'beforeLunch': beforeLunchProgress,
+        'lunch': lunchProgress,
+        'afterLunch': afterLunchProgress,
+      };
+    } catch (e) {
+      return {'beforeLunch': 0.0, 'lunch': 0.0, 'afterLunch': 0.0};
+    }
+  }
+
+  double _shiftProgress() {
+    // If clocked out for shift end (not lunch), show 100%
+    // Only show 100% if clocked out AND last punch was not for lunch
+    if (clockOutTime != null && lastPunchReason != 'lunch') {
+      return 1.0;
+    }
+
+    // If clocked in (or clocked out for lunch - still in progress), check shift times
+    // For lunch break, we're still in the middle of shift, so continue showing progress
+    final isOnLunchBreak = clockOutTime != null && lastPunchReason == 'lunch';
+    if (clockInTime != null && (clockOutTime == null || isOnLunchBreak)) {
       if (shiftStartTime == null ||
           shiftStartTime!.isEmpty ||
           shiftEndTime == null ||
           shiftEndTime!.isEmpty) {
-        return 0.5; // Default progress if shift times not available
+        return 0.02; // Start at 2% when clocked in
       }
     } else {
       // Not clocked in yet
@@ -1142,9 +1329,11 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
       final endParts = shiftEndTime!.split(':');
 
       if (startParts.length < 2 || endParts.length < 2) {
-        // If parsing fails but clocked in, show minimum progress
-        if (clockInTime != null && clockOutTime == null) {
-          return 0.5;
+        // If parsing fails but clocked in (or on lunch break), show minimum progress
+        final isOnLunchBreak =
+            clockOutTime != null && lastPunchReason == 'lunch';
+        if (clockInTime != null && (clockOutTime == null || isOnLunchBreak)) {
+          return 0.02; // Start at 2% when clocked in
         }
         return 0.0;
       }
@@ -1167,9 +1356,11 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         final shiftEndNextDay = shiftEnd.add(const Duration(days: 1));
 
         if (now.isBefore(shiftStart)) {
-          // If clocked in but shift hasn't started, show minimum progress
-          if (clockInTime != null && clockOutTime == null) {
-            return 0.5;
+          // If clocked in (or on lunch break) but shift hasn't started, show minimum progress
+          final isOnLunchBreak =
+              clockOutTime != null && lastPunchReason == 'lunch';
+          if (clockInTime != null && (clockOutTime == null || isOnLunchBreak)) {
+            return 0.02; // Start at 2% when clocked in
           }
           return 0.0; // Shift hasn't started yet
         }
@@ -1178,6 +1369,88 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
           return 1.0; // Shift has ended
         }
 
+        // Only calculate progress if user has clocked in (or is on lunch break)
+        final isOnLunchBreak =
+            clockOutTime != null && lastPunchReason == 'lunch';
+        if (clockInTime == null) {
+          return 0.0; // No progress if not clocked in
+        }
+
+        // Parse clock-in time to calculate actual worked time
+        try {
+          final clockInParts = clockInTime!.split(':');
+          if (clockInParts.length >= 2) {
+            final clockInHour = int.parse(clockInParts[0]);
+            final clockInMin = int.parse(clockInParts[1]);
+            final clockInDateTime = today.add(
+              Duration(hours: clockInHour, minutes: clockInMin),
+            );
+
+            // Handle next day for clock-in if needed
+            DateTime clockInDateTimeAdjusted = clockInDateTime;
+            if (clockInDateTime.isBefore(shiftStart)) {
+              clockInDateTimeAdjusted = clockInDateTime.add(
+                const Duration(days: 1),
+              );
+            }
+
+            // Calculate progress based on actual worked time
+            final totalShiftMinutes = shiftEndNextDay
+                .difference(shiftStart)
+                .inMinutes;
+
+            int workedMinutes;
+            if (isOnLunchBreak && clockOutTime != null) {
+              // On lunch break: calculate progress up to clock-out time (work done before lunch)
+              final clockOutParts = clockOutTime!.split(':');
+              if (clockOutParts.length >= 2) {
+                final clockOutHour = int.parse(clockOutParts[0]);
+                final clockOutMin = int.parse(clockOutParts[1]);
+                final clockOutDateTime = today.add(
+                  Duration(hours: clockOutHour, minutes: clockOutMin),
+                );
+                // Handle next day for clock-out if needed
+                DateTime clockOutDateTimeAdjusted = clockOutDateTime;
+                if (clockOutDateTime.isBefore(clockInDateTimeAdjusted)) {
+                  clockOutDateTimeAdjusted = clockOutDateTime.add(
+                    const Duration(days: 1),
+                  );
+                }
+                workedMinutes = clockOutDateTimeAdjusted
+                    .difference(clockInDateTimeAdjusted)
+                    .inMinutes;
+              } else {
+                workedMinutes = now
+                    .difference(clockInDateTimeAdjusted)
+                    .inMinutes;
+              }
+            } else {
+              // Not on lunch break: calculate from clock-in to now
+              workedMinutes = now.difference(clockInDateTimeAdjusted).inMinutes;
+            }
+
+            // Ensure worked minutes is not negative
+            if (workedMinutes < 0) {
+              return 0.02; // Minimum 2% if clock-in time is in the future
+            }
+
+            double progress = workedMinutes / totalShiftMinutes;
+            if (progress > 1.0) progress = 1.0;
+            if (progress < 0.0) progress = 0.0;
+
+            // Ensure minimum progress of 0.02 (2%) when clocked in
+            if (progress < 0.02) {
+              progress = 0.02;
+            }
+
+            return progress;
+          }
+        } catch (e) {
+          // If parsing fails, return minimum progress
+          return 0.02;
+        }
+
+        // Fallback: calculate from shift start if clock-in parsing fails
         final totalShiftMinutes = shiftEndNextDay
             .difference(shiftStart)
             .inMinutes;
@@ -1187,9 +1460,9 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         if (progress > 1.0) progress = 1.0;
         if (progress < 0.0) progress = 0.0;
 
-        // If clocked in, ensure minimum progress of 0.5 (50%) to show circle is active
-        if (clockInTime != null && clockOutTime == null && progress < 0.5) {
-          progress = 0.5;
+        // Ensure minimum progress of 0.02 (2%)
+        if (progress < 0.02) {
+          progress = 0.02;
         }
 
         return progress;
@@ -1197,9 +1470,11 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
 
       // Normal same-day shift
       if (now.isBefore(shiftStart)) {
-        // If clocked in but shift hasn't started, show minimum progress
-        if (clockInTime != null && clockOutTime == null) {
-          return 0.5;
+        // If clocked in (or on lunch break) but shift hasn't started, show minimum progress
+        final isOnLunchBreak =
+            clockOutTime != null && lastPunchReason == 'lunch';
+        if (clockInTime != null && (clockOutTime == null || isOnLunchBreak)) {
+          return 0.02; // Start at 2% when clocked in
         }
         return 0.0; // Shift hasn't started yet
       }
@@ -1208,7 +1483,69 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         return 1.0; // Shift has ended
       }
 
-      // Calculate progress based on elapsed time
+      // Only calculate progress if user has clocked in (or is on lunch break)
+      final isOnLunchBreak = clockOutTime != null && lastPunchReason == 'lunch';
+      if (clockInTime == null) {
+        return 0.0; // No progress if not clocked in
+      }
+
+      // If on lunch break, calculate progress up to clock-out time (not current time)
+      // Otherwise calculate from clock-in to now
+      try {
+        final clockInParts = clockInTime!.split(':');
+        if (clockInParts.length >= 2) {
+          final clockInHour = int.parse(clockInParts[0]);
+          final clockInMin = int.parse(clockInParts[1]);
+          final clockInDateTime = today.add(
+            Duration(hours: clockInHour, minutes: clockInMin),
+          );
+
+          // Calculate progress based on actual worked time
+          final totalShiftMinutes = shiftEnd.difference(shiftStart).inMinutes;
+
+          int workedMinutes;
+          if (isOnLunchBreak && clockOutTime != null) {
+            // On lunch break: calculate progress up to clock-out time (work done before lunch)
+            final clockOutParts = clockOutTime!.split(':');
+            if (clockOutParts.length >= 2) {
+              final clockOutHour = int.parse(clockOutParts[0]);
+              final clockOutMin = int.parse(clockOutParts[1]);
+              final clockOutDateTime = today.add(
+                Duration(hours: clockOutHour, minutes: clockOutMin),
+              );
+              workedMinutes = clockOutDateTime
+                  .difference(clockInDateTime)
+                  .inMinutes;
+            } else {
+              workedMinutes = now.difference(clockInDateTime).inMinutes;
+            }
+          } else {
+            // Not on lunch break: calculate from clock-in to now
+            workedMinutes = now.difference(clockInDateTime).inMinutes;
+          }
+
+          // Ensure worked minutes is not negative
+          if (workedMinutes < 0) {
+            return 0.02; // Minimum 2% if clock-in time is in the future
+          }
+
+          double progress = workedMinutes / totalShiftMinutes;
+          if (progress > 1.0) progress = 1.0;
+          if (progress < 0.0) progress = 0.0;
+
+          // Ensure minimum progress of 0.02 (2%) when clocked in
+          if (progress < 0.02) {
+            progress = 0.02;
+          }
+
+          return progress;
+        }
+      } catch (e) {
+        // If parsing fails, return minimum progress
+        return 0.02;
+      }
+
+      // Fallback: calculate from shift start if clock-in parsing fails
       final totalShiftMinutes = shiftEnd.difference(shiftStart).inMinutes;
       final elapsedMinutes = now.difference(shiftStart).inMinutes;
 
@@ -1216,30 +1553,160 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
       if (progress > 1.0) progress = 1.0;
       if (progress < 0.0) progress = 0.0;
 
-      // Final check: If clocked in, ensure minimum progress of 0.5 (50%)
-      if (clockInTime != null && clockOutTime == null && progress < 0.5) {
-        progress = 0.5;
+      // Ensure minimum progress of 0.02 (2%)
+      if (progress < 0.02) {
+        progress = 0.02;
       }
 
       return progress;
     } catch (e) {
       // If parsing fails, return default based on clock in status
       if (clockInTime != null) {
-        if (clockOutTime != null) return 1.0;
-        return 0.5; // Show minimum progress when clocked in
+        // Only show 100% if clocked out and NOT on lunch break
+        if (clockOutTime != null && lastPunchReason != 'lunch') {
+          return 1.0;
+        }
+        return 0.02; // Start at 2% when clocked in
       }
       return 0.0;
     }
   }
 
-  // Calculate actual worked hours (excluding lunch break)
-  Map<String, dynamic> _calculateWorkHours() {
-    if (todayLogs.isEmpty) {
-      return {'workedHours': 0, 'workedMinutes': 0, 'lunchMinutes': 0};
+  // Build segmented progress circle showing blue (work), yellow (lunch), blue (work after lunch)
+  Widget _buildSegmentedProgressCircle() {
+    final segments = _getProgressSegments();
+    final beforeLunch = segments['beforeLunch'] ?? 0.0;
+    final lunch = segments['lunch'] ?? 0.0;
+    final afterLunch = segments['afterLunch'] ?? 0.0;
+
+    // If no lunch break, use simple progress
+    if (lunch == 0) {
+      return CircularProgressIndicator(
+        value: _shiftProgress(),
+        strokeWidth: 10,
+        backgroundColor: const Color(0xFFE5E7EB),
+        valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF6366F1)),
+      );
     }
 
+    // Use CustomPaint to draw segmented circle with tooltip on yellow segment
+    return Tooltip(
+      message: lunch > 0 ? "Lunch" : "",
+      preferBelow: false,
+      child: CustomPaint(
+        size: const Size(100, 100),
+        painter: _SegmentedProgressPainter(
+          beforeLunch: beforeLunch,
+          lunch: lunch,
+          afterLunch: afterLunch,
+        ),
+      ),
+    );
+  }
+
+  // Calculate actual worked hours (excluding lunch break)
+  Map<String, dynamic> _calculateWorkHours() {
     int totalWorkedMinutes = 0;
     int lunchBreakMinutes = 0;
+
+    // If we have clockInTime but no logs yet, calculate from clockInTime directly
+    if (todayLogs.isEmpty && clockInTime != null) {
+      try {
+        final now = DateTime.now();
+        final today = DateTime(now.year, now.month, now.day);
+        final clockInParts = clockInTime!.split(':');
+        if (clockInParts.length >= 2) {
+          final clockInHour = int.parse(clockInParts[0]);
+          final clockInMin = int.parse(clockInParts[1]);
+          final clockInDateTime = today.add(
+            Duration(hours: clockInHour, minutes: clockInMin),
+          );
+
+          if (clockOutTime != null && lastPunchReason == 'lunch') {
+            // On lunch break - calculate work up to lunch clock out
+            final clockOutParts = clockOutTime!.split(':');
+            if (clockOutParts.length >= 2) {
+              final clockOutHour = int.parse(clockOutParts[0]);
+              final clockOutMin = int.parse(clockOutParts[1]);
+              final clockOutDateTime = today.add(
+                Duration(hours: clockOutHour, minutes: clockOutMin),
+              );
+              final workBeforeLunch = clockOutDateTime
+                  .difference(clockInDateTime)
+                  .inMinutes;
+              if (workBeforeLunch >= 0) {
+                totalWorkedMinutes = workBeforeLunch;
+              }
+            }
+          } else if (clockOutTime != null && lastPunchReason != 'lunch') {
+            // Shift ended - calculate from clock in to clock out
+            final clockOutParts = clockOutTime!.split(':');
+            if (clockOutParts.length >= 2) {
+              final clockOutHour = int.parse(clockOutParts[0]);
+              final clockOutMin = int.parse(clockOutParts[1]);
+              final clockOutDateTime = today.add(
+                Duration(hours: clockOutHour, minutes: clockOutMin),
+              );
+              final workedMinutes = clockOutDateTime
+                  .difference(clockInDateTime)
+                  .inMinutes;
+              if (workedMinutes >= 0) {
+                totalWorkedMinutes = workedMinutes;
+              }
+            }
+          } else {
+            // Still working - calculate from clock in to now
+            final currentSessionMinutes = now
+                .difference(clockInDateTime)
+                .inMinutes;
+            if (currentSessionMinutes >= 0) {
+              totalWorkedMinutes = currentSessionMinutes;
+            }
+          }
+        }
+      } catch (e) {
+        // If parsing fails, return 0
+      }
+      return {
+        'workedHours': totalWorkedMinutes ~/ 60,
+        'workedMinutes': totalWorkedMinutes % 60,
+        'lunchMinutes': lunchBreakMinutes,
+      };
+    }
+
+    // If logs are empty but we have clockInTime, we already handled it above
+    // This check is for when logs are empty and clockInTime is also null
+    if (todayLogs.isEmpty) {
+      // If clocked in but no logs, try to calculate from clockInTime
+      if (clockInTime != null) {
+        try {
+          final now = DateTime.now();
+          final today = DateTime(now.year, now.month, now.day);
+          final clockInParts = clockInTime!.split(':');
+          if (clockInParts.length >= 2) {
+            final clockInHour = int.parse(clockInParts[0]);
+            final clockInMin = int.parse(clockInParts[1]);
+            final clockInDateTime = today.add(
+              Duration(hours: clockInHour, minutes: clockInMin),
+            );
+            final currentSessionMinutes = now
+                .difference(clockInDateTime)
+                .inMinutes;
+            if (currentSessionMinutes >= 0) {
+              totalWorkedMinutes = currentSessionMinutes;
+            }
+          }
+        } catch (e) {
+          // If parsing fails, return 0
+        }
+        return {
+          'workedHours': totalWorkedMinutes ~/ 60,
+          'workedMinutes': totalWorkedMinutes % 60,
+          'lunchMinutes': lunchBreakMinutes,
+        };
+      }
+      return {'workedHours': 0, 'workedMinutes': 0, 'lunchMinutes': 0};
+    }
 
     // Process logs in pairs: IN-OUT = work session, OUT-IN = break
     for (int i = 0; i < todayLogs.length; i++) {
@@ -1254,8 +1721,10 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
             final outTime = DateTime.parse(nextLog['time']);
             final duration = outTime.difference(inTime).inMinutes;
 
-            // Only count as work if OUT is not for lunch
-            if (nextLog['reason'] != 'lunch') {
+            // Only count as work if:
+            // 1. Duration is positive
+            // 2. OUT is not for lunch (lunch breaks are handled separately)
+            if (duration > 0 && nextLog['reason'] != 'lunch') {
               totalWorkedMinutes += duration;
             }
           }
@@ -1267,8 +1736,16 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
             final inTime = DateTime.parse(nextLog['time']);
             final breakDuration = inTime.difference(outTime).inMinutes;
 
-            // If OUT was for lunch, this is lunch break
-            if (log['reason'] == 'lunch') {
+            // Only count as lunch if ALL conditions are met:
+            // 1. OUT reason is explicitly 'lunch' (not 'shift_start', 'tea', etc.)
+            // 2. IN reason is 'lunch' (coming back from lunch)
+            // 3. Break duration is positive (inTime is after outTime)
+            // 4. Break duration is reasonable (between 15 minutes and 3 hours)
+            if (log['reason'] == 'lunch' &&
+                nextLog['reason'] == 'lunch' &&
+                breakDuration > 0 &&
+                breakDuration >= 15 &&
+                breakDuration <= 180) {
               lunchBreakMinutes += breakDuration;
             }
           }
@@ -1278,18 +1755,109 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
       }
     }
 
-    // Handle current in-progress session (if last punch is 'in' and not lunch)
-    if (lastPunchType == 'in' && todayLogs.isNotEmpty) {
+    // Handle current in-progress session
+    // Always prioritize clockInTime when available (most reliable and immediate)
+    final isOnLunchBreak = clockOutTime != null && lastPunchReason == 'lunch';
+
+    if (clockInTime != null && (clockOutTime == null || isOnLunchBreak)) {
+      try {
+        final now = DateTime.now();
+        final today = DateTime(now.year, now.month, now.day);
+        final clockInParts = clockInTime!.split(':');
+        if (clockInParts.length >= 2) {
+          final clockInHour = int.parse(clockInParts[0]);
+          final clockInMin = int.parse(clockInParts[1]);
+          final clockInDateTime = today.add(
+            Duration(hours: clockInHour, minutes: clockInMin),
+          );
+
+          int currentSessionMinutes = 0;
+          if (isOnLunchBreak && clockOutTime != null) {
+            // On lunch break - calculate work up to lunch clock-out (frozen)
+            final clockOutParts = clockOutTime!.split(':');
+            if (clockOutParts.length >= 2) {
+              final clockOutHour = int.parse(clockOutParts[0]);
+              final clockOutMin = int.parse(clockOutParts[1]);
+              final clockOutDateTime = today.add(
+                Duration(hours: clockOutHour, minutes: clockOutMin),
+              );
+              currentSessionMinutes = clockOutDateTime
+                  .difference(clockInDateTime)
+                  .inMinutes;
+            }
+          } else {
+            // Not on lunch break - calculate from clock-in to now
+            // This handles both initial clock-in and post-lunch work
+            currentSessionMinutes = now.difference(clockInDateTime).inMinutes;
+          }
+
+          if (currentSessionMinutes >= 0) {
+            // Check if this session is already counted in logs
+            bool alreadyCounted = false;
+            if (todayLogs.isNotEmpty && lastPunchType == 'in') {
+              try {
+                final lastInLog = todayLogs.lastWhere(
+                  (log) => log['type'] == 'in',
+                  orElse: () => {},
+                );
+                if (lastInLog.isNotEmpty) {
+                  final logTime = DateTime.parse(lastInLog['time']);
+                  // If log time is very close to clockInTime, it's already counted
+                  final timeDiff =
+                      (logTime.difference(clockInDateTime).inMinutes).abs();
+                  if (timeDiff < 5) {
+                    // Already counted from logs, don't add again
+                    alreadyCounted = true;
+                  }
+                }
+              } catch (e) {
+                // If parsing fails, add the time
+              }
+            }
+
+            if (!alreadyCounted) {
+              // Add current session time (even if 0, it will show 0h 0m correctly)
+              totalWorkedMinutes += currentSessionMinutes;
+            }
+          }
+        }
+      } catch (e) {
+        // If parsing fails, try to use logs as fallback
+        if (lastPunchType == 'in' && todayLogs.isNotEmpty) {
+          try {
+            final lastInLog = todayLogs.lastWhere(
+              (log) => log['type'] == 'in',
+              orElse: () => {},
+            );
+            // After lunch, lastInLog reason will be 'lunch', but we still need to count it
+            if (lastInLog.isNotEmpty) {
+              final inTime = DateTime.parse(lastInLog['time']);
+              final now = DateTime.now();
+              final currentSessionMinutes = now.difference(inTime).inMinutes;
+              if (currentSessionMinutes >= 0) {
+                totalWorkedMinutes += currentSessionMinutes;
+              }
+            }
+          } catch (e) {
+            // Skip if error
+          }
+        }
+      }
+    } else if (lastPunchType == 'in' && todayLogs.isNotEmpty) {
+      // Fallback: use logs if clockInTime is not available
       try {
         final lastInLog = todayLogs.lastWhere(
           (log) => log['type'] == 'in',
           orElse: () => {},
         );
-        if (lastInLog.isNotEmpty && lastInLog['reason'] != 'lunch') {
+        // Count post-lunch work even if reason is 'lunch' (lunch-in)
+        if (lastInLog.isNotEmpty) {
           final inTime = DateTime.parse(lastInLog['time']);
           final now = DateTime.now();
           final currentSessionMinutes = now.difference(inTime).inMinutes;
-          totalWorkedMinutes += currentSessionMinutes;
+          if (currentSessionMinutes >= 0) {
+            totalWorkedMinutes += currentSessionMinutes;
+          }
         }
       } catch (e) {
         // Skip if error
@@ -1340,23 +1908,16 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
             final workHours = _calculateWorkHours();
             final workedH = workHours['workedHours'] as int;
             final workedM = workHours['workedMinutes'] as int;
-            final lunchM = workHours['lunchMinutes'] as int;
 
             if (clockOutTime != null) {
-              // Completed - show worked hours and lunch
-              if (lunchM > 0) {
-                return "${workedH}h ${workedM}m\nLunch: ${lunchM}m";
-              }
+              // Completed - show worked hours only (lunch shown in tooltip on yellow segment)
               return "${workedH}h ${workedM}m";
             } else {
-              // In progress - show elapsed from shift start
-              return "${elapsedHours}h ${elapsedMins}m";
+              // In progress - show actual worked time from clock in (not shift start)
+              return "${workedH}h ${workedM}m";
             }
           } else {
-            // Not clocked in yet - show elapsed time from shift start
-            if (elapsedMinutes > 0) {
-              return "${elapsedHours}h ${elapsedMins}m\nShift Started";
-            }
+            // Not clocked in yet - always show "Not Started"
             return "0h 00m\nNot Started";
           }
         }
@@ -1372,20 +1933,13 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     final workHours = _calculateWorkHours();
     final workedH = workHours['workedHours'] as int;
     final workedM = workHours['workedMinutes'] as int;
-    final lunchM = workHours['lunchMinutes'] as int;
 
     if (clockOutTime == null) {
-      // In progress - show worked hours
-      if (lunchM > 0) {
-        return "${workedH}h ${workedM}m\nLunch: ${lunchM}m";
-      }
+      // In progress - show worked hours only (lunch shown in tooltip on yellow segment)
       return "${workedH}h ${workedM}m\nIn progress";
     }
 
-    // Completed - show worked hours and lunch
-    if (lunchM > 0) {
-      return "${workedH}h ${workedM}m\nLunch: ${lunchM}m";
-    }
+    // Completed - show worked hours only (lunch shown in tooltip on yellow segment)
     return "${workedH}h ${workedM}m";
   }
 
@@ -1520,13 +2074,13 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
           IconButton(
             icon: const Icon(Icons.logout),
             onPressed: () async {
+              final navigator = Navigator.of(context);
               final prefs = await SharedPreferences.getInstance();
               await prefs.setBool('is_logged_in', false);
-              if (mounted) {
-                Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(builder: (context) => const LoginScreen()),
-                );
-              }
+              if (!mounted) return;
+              navigator.pushReplacement(
+                MaterialPageRoute(builder: (context) => const LoginScreen()),
+              );
             },
             tooltip: "Logout",
           ),
@@ -1567,7 +2121,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                     borderRadius: BorderRadius.circular(24),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.05),
+                        color: Colors.black.withValues(alpha: 0.05),
                         blurRadius: 12,
                         offset: const Offset(0, 4),
                       ),
@@ -1647,17 +2201,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                                                 Color
                                               >(Color(0xFF6366F1)),
                                         )
-                                      : CircularProgressIndicator(
-                                          value: _shiftProgress(),
-                                          strokeWidth: 10,
-                                          backgroundColor: const Color(
-                                            0xFFE5E7EB,
-                                          ),
-                                          valueColor:
-                                              const AlwaysStoppedAnimation<
-                                                Color
-                                              >(Color(0xFF6366F1)),
-                                        ),
+                                      : _buildSegmentedProgressCircle(),
                                 ),
                                 Column(
                                   mainAxisSize: MainAxisSize.min,
@@ -1855,7 +2399,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                         isToday: dayInfo.isToday,
                       );
                     },
-                    separatorBuilder: (_, __) => const SizedBox(width: 8),
+                    separatorBuilder: (_, _) => const SizedBox(width: 8),
                     itemCount: 7,
                   ),
                 ),
@@ -1890,7 +2434,7 @@ class _QuickAction extends StatelessWidget {
             shape: BoxShape.circle,
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.05),
+                color: Colors.black.withValues(alpha: 0.05),
                 blurRadius: 6,
                 offset: const Offset(0, 3),
               ),
@@ -2152,6 +2696,96 @@ class LocationHelper {
     } catch (_) {
       return null;
     }
+  }
+}
+
+// ------------------- SEGMENTED PROGRESS PAINTER -------------------
+
+class _SegmentedProgressPainter extends CustomPainter {
+  final double beforeLunch;
+  final double lunch;
+  final double afterLunch;
+
+  _SegmentedProgressPainter({
+    required this.beforeLunch,
+    required this.lunch,
+    required this.afterLunch,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = (size.width - 10) / 2;
+    final strokeWidth = 10.0;
+
+    // Draw background circle
+    final backgroundPaint = Paint()
+      ..color = const Color(0xFFE5E7EB)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth
+      ..strokeCap = StrokeCap.round;
+    canvas.drawCircle(center, radius, backgroundPaint);
+
+    // Draw blue segment: Work before lunch
+    if (beforeLunch > 0) {
+      final beforeLunchPaint = Paint()
+        ..color = const Color(0xFF6366F1)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = strokeWidth
+        ..strokeCap = StrokeCap.round;
+      final beforeLunchSweep = 2 * 3.14159 * beforeLunch;
+      canvas.drawArc(
+        Rect.fromCircle(center: center, radius: radius),
+        -3.14159 / 2, // Start from top (12 o'clock)
+        beforeLunchSweep,
+        false,
+        beforeLunchPaint,
+      );
+    }
+
+    // Draw yellow segment: Lunch break
+    if (lunch > 0) {
+      final lunchPaint = Paint()
+        ..color = const Color(0xFFFFA500)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = strokeWidth
+        ..strokeCap = StrokeCap.round;
+      final lunchSweep = 2 * 3.14159 * lunch;
+      final lunchStart = -3.14159 / 2 + (2 * 3.14159 * beforeLunch);
+      canvas.drawArc(
+        Rect.fromCircle(center: center, radius: radius),
+        lunchStart,
+        lunchSweep,
+        false,
+        lunchPaint,
+      );
+    }
+
+    // Draw blue segment: Work after lunch
+    if (afterLunch > 0) {
+      final afterLunchPaint = Paint()
+        ..color = const Color(0xFF6366F1)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = strokeWidth
+        ..strokeCap = StrokeCap.round;
+      final afterLunchSweep = 2 * 3.14159 * afterLunch;
+      final afterLunchStart =
+          -3.14159 / 2 + (2 * 3.14159 * (beforeLunch + lunch));
+      canvas.drawArc(
+        Rect.fromCircle(center: center, radius: radius),
+        afterLunchStart,
+        afterLunchSweep,
+        false,
+        afterLunchPaint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_SegmentedProgressPainter oldDelegate) {
+    return oldDelegate.beforeLunch != beforeLunch ||
+        oldDelegate.lunch != lunch ||
+        oldDelegate.afterLunch != afterLunch;
   }
 }
 
