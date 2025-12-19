@@ -1,4 +1,5 @@
 <?php
+date_default_timezone_set('Asia/Kolkata');
 header('Content-Type: application/json');
 header('Cache-Control: no-cache, must-revalidate'); // Prevent caching
 
@@ -38,7 +39,7 @@ if (!is_numeric($user_id)) {
 }
 
 // Validate reason (must be one of the allowed values)
-$allowedReasons = ['lunch', 'tea', 'short_leave', 'shift_start', 'shift_end'];
+$allowedReasons = ['lunch', 'tea', 'shift_start', 'shift_end'];
 if (!in_array($reason, $allowedReasons, true)) {
     $reason = 'shift_start'; // Default to shift_start if invalid
 }
@@ -110,6 +111,79 @@ if ($deviceStmt) {
     }
 
     $deviceStmt->close();
+}
+
+// ---------------- FIRST CLOCK-IN / SHIFT END VALIDATION ----------------
+
+// Do not allow the *first* clock-in of the day after the shift end time
+if ($type === 'in') {
+    $timestamp = strtotime($time);
+
+    if ($timestamp !== false) {
+        $currentDate = date('Y-m-d', $timestamp);
+
+        // Check if this user already has a clock-in for this date
+        $firstInStmt = $con->prepare(
+            "SELECT id FROM attendance_logs WHERE user_id = ? AND type = 'in' AND DATE(time) = ? LIMIT 1"
+        );
+
+        if ($firstInStmt) {
+            $firstInStmt->bind_param("is", $user_id, $currentDate);
+            $firstInStmt->execute();
+            $firstInResult = $firstInStmt->get_result();
+
+            $isFirstClockInToday = $firstInResult && $firstInResult->num_rows === 0;
+            $firstInStmt->close();
+
+            if ($isFirstClockInToday) {
+                // Fetch shift start/end time for this employee
+                $empCodeForShift = "EMP" . str_pad((string)intval($user_id), 3, '0', STR_PAD_LEFT);
+                $uidIntForShift = (int)$user_id;
+
+                $shiftStmt = $con->prepare("
+                    SELECT s.start_time, s.end_time
+                    FROM employees e
+                    LEFT JOIN shifts s ON s.id = e.shift_id
+                    WHERE (e.emp_code = ? OR e.id = ?) AND e.status = 1
+                    LIMIT 1
+                ");
+
+                if ($shiftStmt) {
+                    $shiftStmt->bind_param("si", $empCodeForShift, $uidIntForShift);
+                    $shiftStmt->execute();
+                    $shiftResult = $shiftStmt->get_result();
+
+                    if ($shiftResult && $shiftResult->num_rows > 0) {
+                        $shiftRow = $shiftResult->fetch_assoc();
+
+                        if (!empty($shiftRow['end_time'])) {
+                            $shiftEndTimestamp = strtotime($currentDate . ' ' . $shiftRow['end_time']);
+
+                            // Handle overnight shifts (end before or equal start -> next day)
+                            if (!empty($shiftRow['start_time'])) {
+                                $shiftStartTimestamp = strtotime($currentDate . ' ' . $shiftRow['start_time']);
+                                if ($shiftEndTimestamp !== false && $shiftStartTimestamp !== false && $shiftEndTimestamp <= $shiftStartTimestamp) {
+                                    $shiftEndTimestamp += 24 * 60 * 60; // add 1 day
+                                }
+                            }
+
+                            // If the current time is after the (possibly adjusted) shift end time, block first clock-in
+                            if ($shiftEndTimestamp !== false && $timestamp > $shiftEndTimestamp) {
+                                echo json_encode([
+                                    "status" => "error",
+                                    "msg" => "Cannot clock in. Your shift has already ended for today."
+                                ]);
+                                $shiftStmt->close();
+                                exit;
+                            }
+                        }
+                    }
+
+                    $shiftStmt->close();
+                }
+            }
+        }
+    }
 }
 
 // ---------------- INSERT ATTENDANCE LOG ----------------

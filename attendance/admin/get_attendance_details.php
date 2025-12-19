@@ -1,4 +1,5 @@
 <?php
+date_default_timezone_set('Asia/Kolkata');
 include 'db.php';
 
 header('Content-Type: application/json');
@@ -66,15 +67,15 @@ while ($log = $logResult->fetch_assoc()) {
     ];
 }
 
-// Prepare shift information for the response (times formatted as HH:MM where available)
+// Prepare shift information for the response (times formatted as 12-hour with AM/PM where available)
 $shift = null;
 if (!empty($employee['shift_start_time']) && !empty($employee['shift_end_time'])) {
     $shift = [
-        'start_time' => date('H:i', strtotime($employee['shift_start_time'])),
-        'end_time' => date('H:i', strtotime($employee['shift_end_time'])),
+        'start_time' => date('h:i A', strtotime($employee['shift_start_time'])),
+        'end_time' => date('h:i A', strtotime($employee['shift_end_time'])),
         'late_mark_after' => isset($employee['shift_late_mark_after']) ? (int)$employee['shift_late_mark_after'] : 0,
-        'lunch_start' => !empty($employee['shift_lunch_start']) ? date('H:i', strtotime($employee['shift_lunch_start'])) : null,
-        'lunch_end' => !empty($employee['shift_lunch_end']) ? date('H:i', strtotime($employee['shift_lunch_end'])) : null,
+        'lunch_start' => !empty($employee['shift_lunch_start']) ? date('h:i A', strtotime($employee['shift_lunch_start'])) : null,
+        'lunch_end' => !empty($employee['shift_lunch_end']) ? date('h:i A', strtotime($employee['shift_lunch_end'])) : null,
     ];
 }
 

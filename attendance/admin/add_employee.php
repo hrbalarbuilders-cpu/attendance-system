@@ -1,5 +1,6 @@
 <?php
 // add_employee.php
+date_default_timezone_set('Asia/Kolkata');
 include 'db.php';
 
 // ---------- Helper: Generate Next Employee Code ----------

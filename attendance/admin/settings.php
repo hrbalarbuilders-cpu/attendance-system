@@ -1,5 +1,6 @@
 <?php
 // settings.php
+date_default_timezone_set('Asia/Kolkata');
 include 'db.php';
 
 // -------------- FETCH CURRENT LOCATION SETTINGS (default) --------------

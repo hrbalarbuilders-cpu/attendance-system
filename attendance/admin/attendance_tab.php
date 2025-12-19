@@ -1,4 +1,5 @@
 <?php
+date_default_timezone_set('Asia/Kolkata');
 include 'db.php';
 
 /* ---------- MONTH & YEAR (from GET) ---------- */
@@ -234,28 +235,25 @@ function determineAttendanceStatus($dayData, $date, $shiftInfo = null, $weekoffD
     $firstIn = !empty($inLogs) ? $inLogs[0] : null;
     $lastOut = !empty($outLogs) ? $outLogs[count($outLogs) - 1] : null;
     
-    // Get reason from logs (ENUM: 'normal', 'lunch', 'tea', 'short_leave', 'office_leave')
+    // Get reason from logs (ENUM: 'normal', 'lunch', 'tea')
     $reason = strtolower(trim($firstIn['reason'] ?? $lastOut['reason'] ?? 'normal'));
     
     // Check reason field (based on actual ENUM values)
+    // short_leave removed from system; keep for backward compatibility if old data exists
     if ($reason === 'short_leave') {
-        return ['status' => 'SL', 'tooltip' => 'Short Leave'];
+        return ['status' => 'N', 'tooltip' => 'Normal Day'];
     }
     
+    // office_leave removed; if any historical data exists, treat as Normal Day
     if ($reason === 'office_leave') {
-        return ['status' => 'LV', 'tooltip' => 'Leave'];
+        return ['status' => 'N', 'tooltip' => 'Normal Day'];
     }
     
     // Check if clock out is missing
     if ($firstIn && !$lastOut) {
-        // Check if it's end of day (after shift end time + buffer)
-        $currentTime = time();
-        $dayEnd = strtotime($date . ' 23:59:59');
-        
-        // If current time is past day end, mark as didn't clock out
-        if ($currentTime > $dayEnd) {
-            return ['status' => 'DCO', 'tooltip' => "Didn't Clock Out"];
-        }
+        // As soon as there is a first clock-in and no clock-out
+        // show the "Didn't Clock Out" indicator in admin attendance.
+        return ['status' => 'DCO', 'tooltip' => "Didn't Clock Out"];
     }
     
     // Calculate times if shift info available
@@ -492,7 +490,8 @@ body { background:#f5f6f8; font-family: Arial, sans-serif; }
 .att-EG { background:#fed7aa; color:#c2410c; } /* Early Go */
 .att-H { background:#fce7f3; color:#be185d; } /* Holiday */
 .att-LV { background:#f3e8ff; color:#6b21a8; } /* Leave */
-.att-SL { background:#ede9fe; color:#5b21b6; } /* Short Leave */
+/* .att-SL kept only if any historical short_leave records exist */
+.att-SL { background:#ede9fe; color:#5b21b6; }
 .att-WO { background:#cffafe; color:#0e7490; } /* Week Off */
 .att-FH { background:#fed7aa; color:#c2410c; } /* First Half */
 .att-SH { background:#fed7aa; color:#c2410c; } /* Second Half */
@@ -592,9 +591,6 @@ body { background:#f5f6f8; font-family: Arial, sans-serif; }
         </div>
         <div class="att-pill" style="color:#9333ea;">
             <span class="att-pill-icon">✈</span> Leave
-        </div>
-        <div class="att-pill" style="color:#7c3aed;">
-            <span class="att-pill-icon">🏷</span> Short Leave
         </div>
         <div class="att-pill" style="color:#06b6d4;">
             <span class="att-pill-icon">📅</span> Week Off

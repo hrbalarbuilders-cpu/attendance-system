@@ -1,4 +1,5 @@
 <?php
+date_default_timezone_set('Asia/Kolkata');
 include 'db.php';
 
 // Check if holidays table exists, if not create it

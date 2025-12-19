@@ -1,5 +1,7 @@
 <?php
 // shifts.php
+// Ensure all times on this page are handled/displayed in Indian time
+date_default_timezone_set('Asia/Kolkata');
 include 'db.php';
 
 $isAjax = isset($_GET['ajax']) && $_GET['ajax'] == '1';
@@ -19,6 +21,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $total_punches          = (int)($_POST['total_punches'] ?? 0);
     $half_day_time          = $_POST['half_day_time'] ?? '';
 
+    // Normalize all time inputs to 24-hour "H:i" format while allowing AM/PM entry
+    $normalizeTime = function ($t) {
+      $t = trim((string)$t);
+      if ($t === '') {
+        return '';
+      }
+      $ts = strtotime($t);
+      if ($ts === false) {
+        return $t; // leave as-is, will be caught by validation if invalid
+      }
+      return date('H:i', $ts);
+    };
+
+    $start_time = $normalizeTime($start_time);
+    $end_time   = $normalizeTime($end_time);
+    if ($lunch_start !== null && $lunch_start !== '') {
+      $lunch_start = $normalizeTime($lunch_start);
+    }
+    if ($lunch_end !== null && $lunch_end !== '') {
+      $lunch_end = $normalizeTime($lunch_end);
+    }
+
     // Basic validation
     if ($shift_name === '') {
         $errors[] = "Shift name is required.";
@@ -36,22 +60,63 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $errors[] = "Total punches per day must be greater than 0.";
     }
 
-    // Half day time validation + minutes calculation
-    if ($half_day_time === '') {
-        $errors[] = "Half day time is required.";
+    // Half time validation + minutes calculation
+    // If admin leaves half_day_time empty, auto-calc as half of shift duration
+    // (based on start_time and end_time), but still allow manual override.
+    if ($start_time === '') {
+      $errors[] = "Start time is required to calculate half time.";
     } else {
-        if ($start_time === '') {
-            $errors[] = "Start time is required to calculate half day.";
-        } else {
-            $startTs = strtotime($start_time);
-            $halfTs  = strtotime($half_day_time);
+      $startTs = strtotime($start_time);
+      $endTs   = $end_time !== '' ? strtotime($end_time) : false;
 
-            if ($halfTs <= $startTs) {
-                $errors[] = "Half day time must be after shift start time.";
-            } else {
-                $half_day_after = (int)(($halfTs - $startTs) / 60); // minutes from shift start
-            }
+      // Compute full shift duration in minutes (handle overnight shifts)
+      $shiftMinutes = null;
+      if ($startTs !== false && $endTs !== false) {
+        if ($endTs <= $startTs) {
+          // Overnight shift (e.g. 22:00 to 07:30 next day)
+          $endTs += 24 * 60 * 60;
         }
+        $shiftMinutes = (int)(($endTs - $startTs) / 60);
+      }
+
+      if ($half_day_time === '') {
+        if ($shiftMinutes === null) {
+          $errors[] = "Half time is required.";
+        } else {
+          // Auto: half time after half of total shift duration
+          $half_day_after = (int)round($shiftMinutes / 2);
+        }
+      } else {
+        $halfTs = strtotime($half_day_time);
+
+        // Validate manual half time, supporting overnight shifts (e.g. 8 PM to 8 AM)
+        if ($halfTs === false || $startTs === false || $endTs === false) {
+          $errors[] = "Invalid half time.";
+        } else {
+          $startMin = (int)date('H', $startTs) * 60 + (int)date('i', $startTs);
+          $endMin   = (int)date('H', $endTs) * 60 + (int)date('i', $endTs);
+          $halfMin  = (int)date('H', $halfTs) * 60 + (int)date('i', $halfTs);
+
+          $isOvernight = $endMin <= $startMin;
+          if ($isOvernight) {
+            // Shift crosses midnight: move end to next day
+            $endMin += 24 * 60;
+            // If half time appears before start on clock, treat as next day
+            if ($halfMin <= $startMin) {
+              $halfMin += 24 * 60;
+            }
+          }
+
+          if ($halfMin <= $startMin) {
+            $errors[] = "Half time must be after shift start time.";
+          } elseif ($halfMin >= $endMin) {
+            $errors[] = "Half time must be before shift end time.";
+          } else {
+            // Store minutes from shift start to half time
+            $half_day_after = $halfMin - $startMin;
+          }
+        }
+      }
     }
 
     if (empty($errors)) {
@@ -218,36 +283,80 @@ function renderShiftContent($errors, $editRow, $list) {
 
           <div class="col-md-4">
             <label class="form-label">Start Time</label>
-            <input type="time"
-                   name="start_time"
-                   class="form-control"
-                   required
-                   value="<?php echo htmlspecialchars($editRow['start_time'] ?? ($_POST['start_time'] ?? '')); ?>">
+            <div class="input-group">
+              <input type="text"
+                     name="start_time"
+                     id="start_time"
+                     class="form-control time-input"
+                     placeholder="09:00 AM"
+                     readonly
+                     required
+                     value="<?php
+                       if (!empty($_POST['start_time'])) {
+                           echo htmlspecialchars($_POST['start_time']);
+                       } elseif (!empty($editRow['start_time'])) {
+                           echo htmlspecialchars(date('h:i A', strtotime($editRow['start_time'])));
+                       }
+                     ?>">
+            </div>
           </div>
 
           <div class="col-md-4">
             <label class="form-label">End Time</label>
-            <input type="time"
-                   name="end_time"
-                   class="form-control"
-                   required
-                   value="<?php echo htmlspecialchars($editRow['end_time'] ?? ($_POST['end_time'] ?? '')); ?>">
+            <div class="input-group">
+              <input type="text"
+                     name="end_time"
+                     id="end_time"
+                     class="form-control time-input"
+                     placeholder="06:30 PM"
+                     readonly
+                     required
+                     value="<?php
+                       if (!empty($_POST['end_time'])) {
+                           echo htmlspecialchars($_POST['end_time']);
+                       } elseif (!empty($editRow['end_time'])) {
+                           echo htmlspecialchars(date('h:i A', strtotime($editRow['end_time'])));
+                       }
+                     ?>">
+            </div>
           </div>
 
           <div class="col-md-4">
             <label class="form-label">Lunch Start (optional)</label>
-            <input type="time"
-                   name="lunch_start"
-                   class="form-control"
-                   value="<?php echo htmlspecialchars($editRow['lunch_start'] ?? ($_POST['lunch_start'] ?? '')); ?>">
+            <div class="input-group">
+              <input type="text"
+                     name="lunch_start"
+                     id="lunch_start"
+                     class="form-control time-input"
+                     placeholder="01:00 PM"
+                     readonly
+                     value="<?php
+                       if (!empty($_POST['lunch_start'])) {
+                           echo htmlspecialchars($_POST['lunch_start']);
+                       } elseif (!empty($editRow['lunch_start'])) {
+                           echo htmlspecialchars(date('h:i A', strtotime($editRow['lunch_start'])));
+                       }
+                     ?>">
+            </div>
           </div>
 
           <div class="col-md-4">
             <label class="form-label">Lunch End (optional)</label>
-            <input type="time"
-                   name="lunch_end"
-                   class="form-control"
-                   value="<?php echo htmlspecialchars($editRow['lunch_end'] ?? ($_POST['lunch_end'] ?? '')); ?>">
+            <div class="input-group">
+              <input type="text"
+                     name="lunch_end"
+                     id="lunch_end"
+                     class="form-control time-input"
+                     placeholder="01:30 PM"
+                     readonly
+                     value="<?php
+                       if (!empty($_POST['lunch_end'])) {
+                           echo htmlspecialchars($_POST['lunch_end']);
+                       } elseif (!empty($editRow['lunch_end'])) {
+                           echo htmlspecialchars(date('h:i A', strtotime($editRow['lunch_end'])));
+                       }
+                     ?>">
+            </div>
           </div>
 
           <div class="col-md-4">
@@ -269,23 +378,24 @@ function renderShiftContent($errors, $editRow, $list) {
                    value="<?php echo htmlspecialchars($editRow['late_mark_after'] ?? ($_POST['late_mark_after'] ?? '10')); ?>">
           </div>
 
-          <!-- Half Day TIME input (UI) -->
+          <!-- Half Time input (UI) -->
           <div class="col-md-4">
-            <label class="form-label">Half Day After (Time)</label>
-            <input type="time"
-                   name="half_day_time"
-                   class="form-control"
-                   required
-                   value="<?php
-                     if (!empty($_POST['half_day_time'])) {
-                         echo htmlspecialchars($_POST['half_day_time']);
-                     } elseif (!empty($editRow['start_time']) && isset($editRow['half_day_after'])) {
+            <label class="form-label">Half Time After</label>
+            <div class="input-group">
+              <input type="text"
+                     name="half_day_time"
+                     id="half_day_time"
+                     class="form-control time-input"
+                     placeholder="Auto / 02:30 PM"
+                     readonly
+                     value="<?php
+                       if (!empty($_POST['half_day_time'])) {
+                           echo htmlspecialchars($_POST['half_day_time']);
+                       } elseif (!empty($editRow['start_time']) && isset($editRow['half_day_after'])) {
                          $halfTs = strtotime($editRow['start_time']) + ((int)$editRow['half_day_after'] * 60);
-                         echo date('H:i', $halfTs);
-                     }
-                   ?>">
-            <div class="form-text">
-              Example: shift 10:00 hai to yahan 14:30 (2:30 PM) doge.
+                         echo date('h:i A', $halfTs);
+                       }
+                     ?>">
             </div>
           </div>
 
@@ -335,7 +445,7 @@ function renderShiftContent($errors, $editRow, $list) {
               <th>Lunch</th>
               <th>Early In</th>
               <th>Late Mark</th>
-              <th>Half Day</th>
+              <th>Half Time</th>
               <th>Punches</th>
               <th>Updated</th>
               <th style="width: 130px;" class="text-end">Action</th>

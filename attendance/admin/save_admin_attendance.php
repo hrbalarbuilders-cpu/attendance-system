@@ -1,5 +1,6 @@
 <?php
 // save_admin_attendance.php
+date_default_timezone_set('Asia/Kolkata');
 include 'db.php';
 
 header('Content-Type: application/json');

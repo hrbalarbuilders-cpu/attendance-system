@@ -32,7 +32,7 @@ CREATE TABLE `attendance_logs` (
   `user_id` varchar(50) NOT NULL,
   `type` varchar(10) NOT NULL,
   `working_from` enum('office','home','client') DEFAULT NULL,
-  `reason` enum('lunch','tea','short_leave','shift_start','shift_end') NOT NULL DEFAULT 'shift_start',
+  `reason` enum('lunch','tea','shift_start','shift_end') NOT NULL DEFAULT 'shift_start',
   `time` datetime NOT NULL,
   `device_id` varchar(100) NOT NULL,
   `latitude` decimal(10,6) DEFAULT NULL,
