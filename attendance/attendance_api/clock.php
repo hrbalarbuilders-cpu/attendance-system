@@ -9,7 +9,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 
 include "db.php";
 
-// POST se values lo (Flutter se aayegi)
+// Read POST values from Flutter
 $user_id      = isset($_POST['user_id'])      ? trim($_POST['user_id'])      : null;
 $type         = isset($_POST['type'])         ? trim($_POST['type'])         : null;
 $time         = isset($_POST['time'])         ? trim($_POST['time'])         : null;
@@ -39,12 +39,83 @@ if (!is_numeric($user_id)) {
 
 // Validate reason (must be one of the allowed values)
 $allowedReasons = ['lunch', 'tea', 'short_leave', 'shift_start', 'shift_end'];
-if (!in_array($reason, $allowedReasons)) {
+if (!in_array($reason, $allowedReasons, true)) {
     $reason = 'shift_start'; // Default to shift_start if invalid
 }
 
+// ---------------- DEVICE LOCK LOGIC ----------------
+// 1) Per-employee: if this employee already has a different device_id, block.
+// 2) Global: if this device_id is already registered to some OTHER employee, block.
+
+$empCodePattern = "EMP" . str_pad((string)intval($user_id), 3, '0', STR_PAD_LEFT);
+$uidInt = (int)$user_id;
+
+// Track the actual employee row id that this user_id maps to.
+// This avoids treating the same employee as "another employee" in the global check
+// when user_id is derived from emp_code (e.g., EMP006) but employees.id is different.
+$currentEmployeeId = $uidInt;
+
+// Step 1: check current employee's registered device (if any)
+$checkStmt = $con->prepare(
+    "SELECT id, emp_code, device_id
+     FROM employees
+     WHERE (emp_code = ? OR id = ?) AND status = 1
+     LIMIT 1"
+);
+
+if ($checkStmt) {
+    $checkStmt->bind_param("si", $empCodePattern, $uidInt);
+    $checkStmt->execute();
+    $checkResult = $checkStmt->get_result();
+
+    if ($checkResult && $checkResult->num_rows > 0) {
+        $empRow = $checkResult->fetch_assoc();
+        $currentEmployeeId = (int)$empRow['id'];
+        $registeredDeviceId = $empRow['device_id'];
+
+        // If this employee already has a different device registered, reject
+        if (!empty($registeredDeviceId) && $registeredDeviceId !== $device_id) {
+            echo json_encode([
+                "status" => "error",
+                "msg" => "Device not registered for this employee. Please contact administrator."
+            ]);
+            $checkStmt->close();
+            exit;
+        }
+    }
+
+    $checkStmt->close();
+}
+
+// Step 2: ensure this device_id is not registered to any OTHER active employee
+$deviceStmt = $con->prepare(
+    "SELECT id, emp_code
+     FROM employees
+     WHERE device_id = ? AND status = 1 AND id <> ?
+     LIMIT 1"
+);
+
+if ($deviceStmt) {
+    $deviceStmt->bind_param("si", $device_id, $currentEmployeeId);
+    $deviceStmt->execute();
+    $deviceResult = $deviceStmt->get_result();
+
+    if ($deviceResult && $deviceResult->num_rows > 0) {
+        echo json_encode([
+            "status" => "error",
+            "msg" => "This device is already registered with another employee. You cannot clock in from this device."
+        ]);
+        $deviceStmt->close();
+        exit;
+    }
+
+    $deviceStmt->close();
+}
+
+// ---------------- INSERT ATTENDANCE LOG ----------------
+
 // Use prepared statements for security and performance
-$stmt = $con->prepare("INSERT INTO attendance_logs 
+$stmt = $con->prepare("INSERT INTO attendance_logs
         (user_id, type, time, device_id, latitude, longitude, working_from, reason, synced)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)");
 
@@ -61,7 +132,7 @@ $latFloat = ($lat !== null && $lat !== '') ? (float)$lat : null;
 $lngFloat = ($lng !== null && $lng !== '') ? (float)$lng : null;
 
 // Bind parameters
-$stmt->bind_param("isssddss", 
+$stmt->bind_param("isssddss",
     $user_id,      // i = integer
     $type,         // s = string
     $time,         // s = string
@@ -73,6 +144,22 @@ $stmt->bind_param("isssddss",
 );
 
 if ($stmt->execute()) {
+    // On first successful clock, auto-register device_id for the employee if missing
+    $empCodePattern = "EMP" . str_pad((string)intval($user_id), 3, '0', STR_PAD_LEFT);
+    $upd = $con->prepare(
+        "UPDATE employees
+         SET device_id = ?
+         WHERE (emp_code = ? OR id = ?)
+           AND (device_id IS NULL OR device_id = '')
+         LIMIT 1"
+    );
+    if ($upd) {
+        $uidInt = (int)$user_id;
+        $upd->bind_param("ssi", $device_id, $empCodePattern, $uidInt);
+        $upd->execute();
+        $upd->close();
+    }
+
     echo json_encode(["status" => "success"]);
 } else {
     echo json_encode([

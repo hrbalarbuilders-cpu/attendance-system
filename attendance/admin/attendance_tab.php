@@ -128,6 +128,25 @@ $monthNames = [
  7=>'July',8=>'August',9=>'September',10=>'October',11=>'November',12=>'December'
 ];
 
+/**
+ * Format a minute count as hours/minutes (e.g., 130 -> "2h 10m", 45 -> "45m").
+ */
+function formatMinutesAsHoursMinutes(int $minutes): string {
+    if ($minutes < 0) {
+        $minutes = 0;
+    }
+    $hours = intdiv($minutes, 60);
+    $mins  = $minutes % 60;
+
+    if ($hours > 0 && $mins > 0) {
+        return sprintf('%dh %dm', $hours, $mins);
+    }
+    if ($hours > 0) {
+        return sprintf('%dh', $hours);
+    }
+    return sprintf('%dm', $mins);
+}
+
 /* ---------- Function to Determine Attendance Status ---------- */
 function determineAttendanceStatus($dayData, $date, $shiftInfo = null, $weekoffDays = null, $holidayName = null) {
     // Check if date is in the future
@@ -251,7 +270,8 @@ function determineAttendanceStatus($dayData, $date, $shiftInfo = null, $weekoffD
         $lateThreshold = $shiftStart + ($lateMarkAfter * 60);
         if ($clockInTime > $lateThreshold) {
             $lateMinutes = round(($clockInTime - $shiftStart) / 60);
-            return ['status' => 'L', 'tooltip' => "Late by {$lateMinutes} minutes"];
+            $lateText = formatMinutesAsHoursMinutes($lateMinutes);
+            return ['status' => 'L', 'tooltip' => "Late by {$lateText}"];
         }
         
         // Check for Early Go (if clocked out before shift end)
@@ -261,7 +281,8 @@ function determineAttendanceStatus($dayData, $date, $shiftInfo = null, $weekoffD
             
             if ($clockOutTime < $earlyGoThreshold) {
                 $earlyMinutes = round(($shiftEnd - $clockOutTime) / 60);
-                return ['status' => 'EG', 'tooltip' => "Early Go by {$earlyMinutes} minutes"];
+                $earlyText = formatMinutesAsHoursMinutes($earlyMinutes);
+                return ['status' => 'EG', 'tooltip' => "Early Go by {$earlyText}"];
             }
             
             // Check for half day (less than half_day_after minutes worked)

@@ -10,6 +10,9 @@ import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as p;
 import 'package:sqflite/sqflite.dart';
 
+const String baseUrl =
+    "http://192.168.1.142:8080/attendance-system/attendance/attendance_api";
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   runApp(const MyApp());
@@ -67,10 +70,6 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _isLoading = false;
   bool _obscurePassword = true;
   final _formKey = GlobalKey<FormState>();
-
-  // BACKEND CONFIG
-  static const String baseUrl =
-      "http://192.168.1.103:8080/attendance-system/attendance/attendance_api";
 
   @override
   void dispose() {
@@ -328,6 +327,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   // UI ke liye
   String? clockInTime;
   String? clockOutTime;
+  String? _todayServerWorkedLabel; // Effective work time from server (today)
   bool isTodayMarked = false;
   bool isTodaySynced = false;
   bool isLoading = false;
@@ -349,9 +349,9 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   lastPunchReason; // Last punch reason: 'shift_start', 'lunch', 'tea', 'shift_end'
   List<Map<String, dynamic>> todayLogs = []; // All attendance logs for today
 
-  // BACKEND CONFIG
-  static const String baseUrl =
-      "http://192.168.1.103:8080/attendance-system/attendance/attendance_api";
+  // Wishes (birthdays/anniversaries)
+  List<Map<String, dynamic>> wishes = [];
+  bool wishesLoading = false;
 
   int userId = 1; // Will be loaded from SharedPreferences
   String userName = "User"; // User name
@@ -375,6 +375,9 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
 
     // Fetch user's shift information
     _fetchUserShift();
+
+    // Fetch upcoming birthdays/anniversaries
+    _fetchWishes();
 
     // Connection listener for location, shift, and attendance updates
     _connSub = Connectivity().onConnectivityChanged.listen((results) {
@@ -401,6 +404,55 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     _connSub.cancel();
     _progressTimer?.cancel();
     super.dispose();
+  }
+
+  // Fetch upcoming birthdays and work anniversaries
+  Future<void> _fetchWishes() async {
+    try {
+      setState(() {
+        wishesLoading = true;
+      });
+
+      final conn = await Connectivity().checkConnectivity();
+      if (conn.contains(ConnectivityResult.none) || conn.isEmpty) {
+        setState(() {
+          wishesLoading = false;
+        });
+        return;
+      }
+
+      final res = await http.get(
+        Uri.parse("$baseUrl/get_wishes.php?days=7"),
+      );
+
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        if (data['status'] == 'success' && data['data'] is List) {
+          final List<dynamic> list = data['data'];
+          setState(() {
+            wishes = list
+                .whereType<Map>()
+                .map<Map<String, dynamic>>((e) => {
+                      'id': e['id'],
+                      'name': e['name'] ?? 'Employee',
+                      'type': e['type'] ?? 'birthday',
+                      'date': e['date'] ?? '',
+                      'days_until': e['days_until'] ?? 0,
+                      'years': e['years'],
+                    })
+                .toList();
+          });
+        }
+      }
+    } catch (_) {
+      // ignore
+    } finally {
+      if (mounted) {
+        setState(() {
+          wishesLoading = false;
+        });
+      }
+    }
   }
 
   // Check login and load user data
@@ -546,16 +598,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                           ),
                         ]
                       : [
-                          // Clock OUT options (before lunch or normal clock out)
-                          ListTile(
-                            leading: const Icon(
-                              Icons.check_circle_outline,
-                              color: Colors.green,
-                            ),
-                            title: const Text('Normal'),
-                            subtitle: const Text('Regular clock out'),
-                            onTap: () => Navigator.pop(context, 'shift_start'),
-                          ),
+                          // Clock OUT options (before lunch)
                           ListTile(
                             leading: const Icon(
                               Icons.lunch_dining,
@@ -577,15 +620,6 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                         ]
                 : [
                     // Clock IN options (for multiple punches)
-                    ListTile(
-                      leading: const Icon(
-                        Icons.check_circle_outline,
-                        color: Colors.green,
-                      ),
-                      title: const Text('Normal'),
-                      subtitle: const Text('Regular clock in'),
-                      onTap: () => Navigator.pop(context, 'shift_start'),
-                    ),
                     ListTile(
                       leading: const Icon(
                         Icons.lunch_dining,
@@ -766,6 +800,23 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         return;
       }
 
+      // Reject if office location isn't configured yet
+      if (locResult.radiusMeters <= 0) {
+        setState(() {
+          isLoading = false;
+          pendingClockType = null;
+          pendingClockTime = null;
+          if (type == 'in') clockInTime = null;
+          if (type == 'out') clockOutTime = null;
+          isTodayMarked = false;
+        });
+        _showSnack(
+          "Office location not configured. Please set it in admin Settings > Location and refresh.",
+        );
+        await _saveTodayToPrefs();
+        return;
+      }
+
       // Reject if outside office area
       if (!insideOffice) {
         setState(() {
@@ -776,7 +827,15 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
           if (type == 'out') clockOutTime = null;
           isTodayMarked = false;
         });
-        _showSnack("You are outside office area. Clock-$type not allowed.");
+        // Show how far outside the geofence the user is
+        final dist = locResult.distanceMeters;
+        final radius = locResult.radiusMeters;
+        final overBy = dist - radius;
+        final overText = overBy > 0 ? overBy.toStringAsFixed(0) : '0';
+        final radiusText = radius > 0 ? radius.toStringAsFixed(0) : '0';
+        _showSnack(
+          "Outside office area by ${overText}m (allowed radius ${radiusText}m). Clock-$type not allowed.",
+        );
         await _saveTodayToPrefs();
         return;
       }
@@ -949,6 +1008,20 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
             clockOutTime = data['clock_out'];
             todayPunchesCount = data['total_punches_today'] ?? 0;
 
+            // Optional: store server-calculated effective minutes for today
+            // Use this only when the day is effectively completed (has a clock_out),
+            // so that in-progress days still show live-updating local time.
+            final effectiveMin = data['effective_minutes'];
+            final hasClockOut =
+                data['clock_out'] != null && (data['clock_out'] as String).isNotEmpty;
+            if (effectiveMin is int && hasClockOut) {
+              final workedH = effectiveMin ~/ 60;
+              final workedM = effectiveMin % 60;
+              _todayServerWorkedLabel = "${workedH}h ${workedM}m";
+            } else {
+              _todayServerWorkedLabel = null;
+            }
+
             // Determine last punch type and reason from logs
             final logs = data['logs'] as List<dynamic>?;
             if (logs != null && logs.isNotEmpty) {
@@ -1054,6 +1127,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
       _fetchTodayAttendance(),
       _fetchUserShift(),
       _fetchOfficeLocation(),
+      _fetchWishes(),
     ]);
   }
 
@@ -1115,187 +1189,6 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     final dayName = weekdayNames[now.weekday % 7];
     return "$dayName, ${now.day.toString().padLeft(2, '0')} ${months[now.month - 1]}";
   }
-
-  // Calculate progress segments for visual display
-  // Blue starts from shift start, pauses at lunch out, resumes after lunch in
-  Map<String, double> _getProgressSegments() {
-    final isOnLunchBreak = clockOutTime != null && lastPunchReason == 'lunch';
-
-    if (shiftStartTime == null ||
-        shiftStartTime!.isEmpty ||
-        shiftEndTime == null ||
-        shiftEndTime!.isEmpty ||
-        clockInTime == null) {
-      return {'beforeLunch': 0.0, 'lunch': 0.0, 'afterLunch': 0.0};
-    }
-
-    try {
-      final now = DateTime.now();
-      final today = DateTime(now.year, now.month, now.day);
-      final startParts = shiftStartTime!.split(':');
-      final endParts = shiftEndTime!.split(':');
-
-      if (startParts.length < 2 || endParts.length < 2) {
-        return {'beforeLunch': 0.0, 'lunch': 0.0, 'afterLunch': 0.0};
-      }
-
-      final startHour = int.parse(startParts[0]);
-      final startMin = int.parse(startParts[1]);
-      final endHour = int.parse(endParts[0]);
-      final endMin = int.parse(endParts[1]);
-      final shiftStart = today.add(
-        Duration(hours: startHour, minutes: startMin),
-      );
-      final shiftEnd = today.add(Duration(hours: endHour, minutes: endMin));
-      final totalShiftMinutes = shiftEnd.difference(shiftStart).inMinutes;
-
-      // Parse clock-in time
-      final clockInParts = clockInTime!.split(':');
-      if (clockInParts.length < 2) {
-        return {'beforeLunch': 0.0, 'lunch': 0.0, 'afterLunch': 0.0};
-      }
-      final clockInHour = int.parse(clockInParts[0]);
-      final clockInMin = int.parse(clockInParts[1]);
-      final clockInDateTime = today.add(
-        Duration(hours: clockInHour, minutes: clockInMin),
-      );
-
-      // Find lunch break in logs
-      DateTime? lunchOutTime;
-      DateTime? lunchInTime;
-      for (int i = 0; i < todayLogs.length; i++) {
-        if (todayLogs[i]['type'] == 'out' &&
-            todayLogs[i]['reason'] == 'lunch' &&
-            i < todayLogs.length - 1 &&
-            todayLogs[i + 1]['type'] == 'in') {
-          try {
-            lunchOutTime = DateTime.parse(todayLogs[i]['time']);
-            lunchInTime = DateTime.parse(todayLogs[i + 1]['time']);
-            break;
-          } catch (e) {
-            // Skip invalid times
-          }
-        }
-      }
-
-      double beforeLunchProgress = 0.0;
-      double lunchProgress = 0.0;
-      double afterLunchProgress = 0.0;
-
-      // Progress starts from shift start time (not clock-in)
-      // Blue segment represents elapsed time from shift start, updates in real-time
-      if (lunchOutTime != null && lunchInTime != null) {
-        // Has lunch break
-
-        // Blue segment: Time from shift start to lunch out (frozen at lunch out)
-        // Only show progress if clocked in before or at lunch out
-        if (clockInDateTime.isBefore(lunchOutTime) ||
-            clockInDateTime.isAtSameMomentAs(lunchOutTime)) {
-          final elapsedToLunchOut = lunchOutTime
-              .difference(shiftStart)
-              .inMinutes;
-          if (elapsedToLunchOut > 0) {
-            beforeLunchProgress = elapsedToLunchOut / totalShiftMinutes;
-          }
-        }
-
-        // Yellow segment: Lunch break - grows in real-time from lunch out to now (if still on lunch) or lunch in (if lunch ended)
-        if (isOnLunchBreak) {
-          // Still on lunch break - yellow grows from lunch out to now
-          final lunchElapsed = now.difference(lunchOutTime).inMinutes;
-          if (lunchElapsed > 0) {
-            lunchProgress = lunchElapsed / totalShiftMinutes;
-          }
-        } else {
-          // Lunch ended - yellow is frozen at lunch duration
-          final lunchDuration = lunchInTime.difference(lunchOutTime).inMinutes;
-          if (lunchDuration > 0) {
-            lunchProgress = lunchDuration / totalShiftMinutes;
-          }
-        }
-
-        // Blue segment: Work after lunch - grows in real-time from lunch in to now
-        if (isOnLunchBreak) {
-          // On lunch break - no work after lunch yet
-          afterLunchProgress = 0.0;
-        } else if (clockOutTime != null && lastPunchReason != 'lunch') {
-          // Shift ended - blue after lunch is frozen at clock out
-          final clockOutParts = clockOutTime!.split(':');
-          if (clockOutParts.length >= 2) {
-            final clockOutHour = int.parse(clockOutParts[0]);
-            final clockOutMin = int.parse(clockOutParts[1]);
-            final clockOutDateTime = today.add(
-              Duration(hours: clockOutHour, minutes: clockOutMin),
-            );
-            final elapsedAfterLunch = clockOutDateTime
-                .difference(lunchInTime)
-                .inMinutes;
-            if (elapsedAfterLunch > 0) {
-              afterLunchProgress = elapsedAfterLunch / totalShiftMinutes;
-            }
-          }
-        } else {
-          // Still working after lunch - blue grows in real-time from lunch in to now
-          final elapsedAfterLunch = now.difference(lunchInTime).inMinutes;
-          if (elapsedAfterLunch > 0) {
-            afterLunchProgress = elapsedAfterLunch / totalShiftMinutes;
-          }
-        }
-      } else {
-        // No lunch break - only blue segment fills from shift start
-        if (isOnLunchBreak && clockOutTime != null) {
-          // On lunch break but not in logs yet - blue frozen at clock out, yellow grows
-          final clockOutParts = clockOutTime!.split(':');
-          if (clockOutParts.length >= 2) {
-            final clockOutHour = int.parse(clockOutParts[0]);
-            final clockOutMin = int.parse(clockOutParts[1]);
-            final clockOutDateTime = today.add(
-              Duration(hours: clockOutHour, minutes: clockOutMin),
-            );
-            // Blue frozen at clock out
-            if (clockInDateTime.isBefore(clockOutDateTime) ||
-                clockInDateTime.isAtSameMomentAs(clockOutDateTime)) {
-              final elapsedToClockOut = clockOutDateTime
-                  .difference(shiftStart)
-                  .inMinutes;
-              if (elapsedToClockOut >= 0) {
-                beforeLunchProgress = elapsedToClockOut / totalShiftMinutes;
-              }
-            }
-            // Yellow grows from clock out to now
-            final lunchElapsed = now.difference(clockOutDateTime).inMinutes;
-            if (lunchElapsed > 0) {
-              lunchProgress = lunchElapsed / totalShiftMinutes;
-            }
-          }
-        } else {
-          // No lunch - blue grows in real-time from shift start to now
-          // Progress based on shift start, only if clocked in
-          if (clockInDateTime.isBefore(now) ||
-              clockInDateTime.isAtSameMomentAs(now)) {
-            final elapsedMinutes = now.difference(shiftStart).inMinutes;
-            if (elapsedMinutes >= 0) {
-              beforeLunchProgress = elapsedMinutes / totalShiftMinutes;
-            }
-          }
-        }
-      }
-
-      // Ensure values are within bounds
-      beforeLunchProgress = beforeLunchProgress.clamp(0.0, 1.0);
-      lunchProgress = lunchProgress.clamp(0.0, 1.0);
-      afterLunchProgress = afterLunchProgress.clamp(0.0, 1.0);
-
-      return {
-        'beforeLunch': beforeLunchProgress,
-        'lunch': lunchProgress,
-        'afterLunch': afterLunchProgress,
-      };
-    } catch (e) {
-      return {'beforeLunch': 0.0, 'lunch': 0.0, 'afterLunch': 0.0};
-    }
-  }
-
   double _shiftProgress() {
     // If clocked out for shift end (not lunch), show 100%
     // Only show 100% if clocked out AND last punch was not for lunch
@@ -1572,33 +1465,256 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     }
   }
 
-  // Build segmented progress circle showing blue (work), yellow (lunch), blue (work after lunch)
-  Widget _buildSegmentedProgressCircle() {
-    final segments = _getProgressSegments();
-    final beforeLunch = segments['beforeLunch'] ?? 0.0;
-    final lunch = segments['lunch'] ?? 0.0;
-    final afterLunch = segments['afterLunch'] ?? 0.0;
+  // Compute fractions of the shift covered by late time, work before lunch,
+  // lunch break, and work after lunch.
+  Map<String, double> _workBreakFractions() {
+    final workHours = _calculateWorkHours();
+    final workedH = workHours['workedHours'] as int? ?? 0;
+    final workedM = workHours['workedMinutes'] as int? ?? 0;
+    final lunchM = workHours['lunchMinutes'] as int? ?? 0;
 
-    // If no lunch break, use simple progress
-    if (lunch == 0) {
-      return CircularProgressIndicator(
-        value: _shiftProgress(),
-        strokeWidth: 10,
-        backgroundColor: const Color(0xFFE5E7EB),
-        valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF6366F1)),
-      );
+    final workedTotalMinutes = workedH * 60 + workedM;
+    final lunchMinutes = lunchM;
+
+    int totalShiftMinutes = 0;
+    int lateMinutes = 0;
+
+    DateTime? shiftStart;
+
+    // Try to use configured shift start/end to determine full shift length
+    if (shiftStartTime != null &&
+        shiftEndTime != null &&
+        shiftStartTime!.isNotEmpty &&
+        shiftEndTime!.isNotEmpty) {
+      try {
+        final now = DateTime.now();
+        final today = DateTime(now.year, now.month, now.day);
+        final startParts = shiftStartTime!.split(':');
+        final endParts = shiftEndTime!.split(':');
+        if (startParts.length >= 2 && endParts.length >= 2) {
+          final startHour = int.parse(startParts[0]);
+          final startMin = int.parse(startParts[1]);
+          final endHour = int.parse(endParts[0]);
+          final endMin = int.parse(endParts[1]);
+          shiftStart = today.add(
+            Duration(hours: startHour, minutes: startMin),
+          );
+          DateTime shiftEnd = today.add(
+            Duration(hours: endHour, minutes: endMin),
+          );
+          if (shiftEnd.isBefore(shiftStart)) {
+            shiftEnd = shiftEnd.add(const Duration(days: 1));
+          }
+          totalShiftMinutes = shiftEnd.difference(shiftStart).inMinutes;
+
+          // Determine late minutes based on first IN punch compared to shift start
+          DateTime? firstInTime;
+          if (todayLogs.isNotEmpty) {
+            for (final log in todayLogs) {
+              if (log['type'] == 'in') {
+                try {
+                  final t = DateTime.parse(log['time']);
+                  if (firstInTime == null || t.isBefore(firstInTime!)) {
+                    firstInTime = t;
+                  }
+                } catch (_) {}
+              }
+            }
+          } else if (clockInTime != null) {
+            try {
+              final clockInParts = clockInTime!.split(':');
+              if (clockInParts.length >= 2) {
+                final h = int.parse(clockInParts[0]);
+                final m = int.parse(clockInParts[1]);
+                firstInTime = today.add(Duration(hours: h, minutes: m));
+              }
+            } catch (_) {}
+          }
+
+          if (firstInTime != null && firstInTime.isAfter(shiftStart)) {
+            lateMinutes = firstInTime.difference(shiftStart).inMinutes;
+            if (lateMinutes < 0) lateMinutes = 0;
+          }
+        }
+      } catch (_) {
+        totalShiftMinutes = 0;
+      }
     }
 
-    // Use CustomPaint to draw segmented circle with tooltip on yellow segment
-    return Tooltip(
-      message: lunch > 0 ? "Lunch" : "",
-      preferBelow: false,
+    // Fallback: if shift times are not available, base fractions on
+    // total of worked + lunch minutes
+    if (totalShiftMinutes <= 0) {
+      totalShiftMinutes = workedTotalMinutes + lunchMinutes;
+    }
+
+    if (totalShiftMinutes <= 0) {
+      return {
+        'late': 0.0,
+        'workBefore': 0.0,
+        'lunch': 0.0,
+        'workAfter': 0.0,
+        'early': 0.0,
+      };
+    }
+
+    // Estimate work before and after lunch based on first lunch
+    int workBeforeLunchMinutes = 0;
+    int workAfterLunchMinutes = 0;
+
+    if (shiftStart != null && todayLogs.isNotEmpty) {
+      // Find first IN (arrival)
+      DateTime? firstInTime;
+      for (final log in todayLogs) {
+        if (log['type'] == 'in') {
+          try {
+            final t = DateTime.parse(log['time']);
+            if (firstInTime == null || t.isBefore(firstInTime!)) {
+              firstInTime = t;
+            }
+          } catch (_) {}
+        }
+      }
+
+      // Find first lunch OUT/IN pair
+      DateTime? lunchOutTime;
+      DateTime? lunchInTime;
+      for (int i = 0; i < todayLogs.length - 1; i++) {
+        final log = todayLogs[i];
+        final nextLog = todayLogs[i + 1];
+        if (log['type'] == 'out' &&
+            log['reason'] == 'lunch' &&
+            nextLog['type'] == 'in' &&
+            nextLog['reason'] == 'lunch') {
+          try {
+            lunchOutTime = DateTime.parse(log['time']);
+            lunchInTime = DateTime.parse(nextLog['time']);
+            break;
+          } catch (_) {}
+        }
+      }
+
+      if (firstInTime != null && lunchOutTime != null &&
+          lunchOutTime.isAfter(firstInTime)) {
+        workBeforeLunchMinutes =
+            lunchOutTime.difference(firstInTime).inMinutes;
+        if (workBeforeLunchMinutes < 0) {
+          workBeforeLunchMinutes = 0;
+        }
+
+        // Lunch duration from logs if available, otherwise fall back
+        int lunchFromLogs = 0;
+        if (lunchInTime != null && lunchInTime.isAfter(lunchOutTime)) {
+          lunchFromLogs = lunchInTime.difference(lunchOutTime).inMinutes;
+        }
+        final effectiveLunch =
+            lunchFromLogs > 0 ? lunchFromLogs : lunchMinutes;
+
+        workAfterLunchMinutes =
+            workedTotalMinutes - workBeforeLunchMinutes;
+        if (workAfterLunchMinutes < 0) {
+          workAfterLunchMinutes = 0;
+        }
+
+        // Ensure we don't exceed available time window
+        if (workBeforeLunchMinutes + effectiveLunch + workAfterLunchMinutes >
+            totalShiftMinutes) {
+          final scale = totalShiftMinutes /
+              (workBeforeLunchMinutes + effectiveLunch + workAfterLunchMinutes);
+          workBeforeLunchMinutes =
+              (workBeforeLunchMinutes * scale).round();
+          workAfterLunchMinutes =
+              (workAfterLunchMinutes * scale).round();
+        }
+      } else {
+        // No proper lunch pair found - treat all as work
+        workBeforeLunchMinutes = workedTotalMinutes;
+        workAfterLunchMinutes = 0;
+      }
+    } else {
+      // No shift start or logs - treat all as work
+      workBeforeLunchMinutes = workedTotalMinutes;
+      workAfterLunchMinutes = 0;
+    }
+
+    // Early minutes: only count when the employee has actually clocked out
+    // for the day (with a non-lunch reason). While the shift is not yet
+    // finished or there is no final clock-out, we don't treat remaining
+    // time as "early leave".
+    int earlyMinutes = 0;
+    final hasFinalClockOut =
+        clockOutTime != null && lastPunchReason != 'lunch';
+
+    if (hasFinalClockOut) {
+      earlyMinutes = totalShiftMinutes -
+          (lateMinutes +
+              workBeforeLunchMinutes +
+              lunchMinutes +
+              workAfterLunchMinutes);
+      if (earlyMinutes < 0) earlyMinutes = 0;
+    }
+
+    double lateFraction = lateMinutes / totalShiftMinutes;
+    double workBeforeFraction = workBeforeLunchMinutes / totalShiftMinutes;
+    double lunchFraction = lunchMinutes / totalShiftMinutes;
+    double workAfterFraction = workAfterLunchMinutes / totalShiftMinutes;
+    double earlyFraction = earlyMinutes / totalShiftMinutes;
+
+    // Clamp to [0, 1]
+    lateFraction = lateFraction.clamp(0.0, 1.0);
+    workBeforeFraction = workBeforeFraction.clamp(0.0, 1.0);
+    lunchFraction = lunchFraction.clamp(0.0, 1.0);
+    workAfterFraction = workAfterFraction.clamp(0.0, 1.0);
+    earlyFraction = earlyFraction.clamp(0.0, 1.0);
+
+    final total = lateFraction +
+      workBeforeFraction +
+      lunchFraction +
+      workAfterFraction +
+      earlyFraction;
+    if (total > 1.0 && total > 0) {
+      lateFraction /= total;
+      workBeforeFraction /= total;
+      lunchFraction /= total;
+      workAfterFraction /= total;
+      earlyFraction /= total;
+    }
+
+    return {
+      'late': lateFraction,
+      'workBefore': workBeforeFraction,
+      'lunch': lunchFraction,
+      'workAfter': workAfterFraction,
+      'early': earlyFraction,
+    };
+  }
+
+  // Segmented progress circle is visual-only now; no tap handler
+
+  // Build segmented progress circle: blue for work, yellow for break
+  Widget _buildSegmentedProgressCircle() {
+    final segments = _workBreakFractions();
+    final lateFraction = segments['late'] ?? 0.0;
+    final workBeforeFraction = segments['workBefore'] ?? 0.0;
+    final lunchFraction = segments['lunch'] ?? 0.0;
+    final workAfterFraction = segments['workAfter'] ?? 0.0;
+    final earlyFraction = segments['early'] ?? 0.0;
+
+    return SizedBox(
+      width: 100,
+      height: 100,
       child: CustomPaint(
-        size: const Size(100, 100),
-        painter: _SegmentedProgressPainter(
-          beforeLunch: beforeLunch,
-          lunch: lunch,
-          afterLunch: afterLunch,
+        painter: _WorkBreakCirclePainter(
+          lateFraction: lateFraction,
+          workBeforeFraction: workBeforeFraction,
+          lunchFraction: lunchFraction,
+          workAfterFraction: workAfterFraction,
+          earlyFraction: earlyFraction,
+          workColor: const Color(0xFF6366F1),        // Blue: worked time
+          breakColor: const Color(0xFFFACC15),       // Yellow: lunch break
+          lateColor: const Color(0xFFF97373),        // Red: late arrival
+          earlyColor: const Color(0xFF22C55E),       // Green: early leave
+          backgroundColor: const Color(0xFFE5E7EB),  // Grey: base track
+          strokeWidth: 10,
         ),
       ),
     );
@@ -1721,10 +1837,10 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
             final outTime = DateTime.parse(nextLog['time']);
             final duration = outTime.difference(inTime).inMinutes;
 
-            // Only count as work if:
-            // 1. Duration is positive
-            // 2. OUT is not for lunch (lunch breaks are handled separately)
-            if (duration > 0 && nextLog['reason'] != 'lunch') {
+            // Any IN -> OUT period is work time, even if the OUT
+            // is marked as 'lunch'. The actual lunch break is the
+            // OUT -> IN duration where both reasons are 'lunch'.
+            if (duration > 0) {
               totalWorkedMinutes += duration;
             }
           }
@@ -1877,6 +1993,11 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
       return pendingClockType == 'in' ? "Marking..." : "Marking...";
     }
 
+    // If server has sent effective_minutes for today, always use that
+    if (_todayServerWorkedLabel != null && _todayServerWorkedLabel!.isNotEmpty) {
+      return _todayServerWorkedLabel!;
+    }
+
     // Calculate elapsed time from shift start
     if (shiftStartTime != null && shiftStartTime!.isNotEmpty) {
       try {
@@ -1891,17 +2012,14 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
             Duration(hours: startHour, minutes: startMin),
           );
 
-          // Calculate elapsed time from shift start
+          // Calculate elapsed time from shift start (kept for potential future use)
           int elapsedMinutes = 0;
           if (now.isAfter(shiftStart)) {
             elapsedMinutes = now.difference(shiftStart).inMinutes;
           } else if (now.isBefore(shiftStart)) {
             // Shift hasn't started yet
-            return "0h 00m\nNot Started";
+            return "0h 00m";
           }
-
-          final elapsedHours = elapsedMinutes ~/ 60;
-          final elapsedMins = elapsedMinutes % 60;
 
           // Also calculate worked hours (excluding lunch) if clocked in
           if (clockInTime != null) {
@@ -1917,8 +2035,8 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
               return "${workedH}h ${workedM}m";
             }
           } else {
-            // Not clocked in yet - always show "Not Started"
-            return "0h 00m\nNot Started";
+            // Not clocked in yet
+            return "0h 00m";
           }
         }
       } catch (e) {
@@ -1936,7 +2054,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
 
     if (clockOutTime == null) {
       // In progress - show worked hours only (lunch shown in tooltip on yellow segment)
-      return "${workedH}h ${workedM}m\nIn progress";
+      return "${workedH}h ${workedM}m";
     }
 
     // Completed - show worked hours only (lunch shown in tooltip on yellow segment)
@@ -1953,11 +2071,116 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     final label = weekdays[date.weekday % 7];
     final dateLabel =
         "${date.day.toString().padLeft(2, '0')} ${_monthShort(date.month)}";
+    final dateString = "${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}";
 
     final isToday =
         date.day == now.day && date.month == now.month && date.year == now.year;
 
-    return _WeekDayInfo(label, dateLabel, isToday);
+    return _WeekDayInfo(label, dateLabel, isToday, dateString);
+  }
+
+  // Show day summary dialog with time details
+  Future<void> _showDaySummary(String dateString) async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: CircularProgressIndicator(color: Colors.white),
+      ),
+    );
+
+    try {
+      final res = await http.get(
+        Uri.parse(
+          "$baseUrl/get_day_summary.php?user_id=$userId&date=$dateString",
+        ),
+      );
+
+      Navigator.of(context).pop(); // Close loading
+
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        if (data['status'] == 'success') {
+          final summary = data['data'];
+          final hasAttendance = summary['has_attendance'] ?? false;
+
+          if (!hasAttendance) {
+            _showSnack('No attendance recorded for this day');
+            return;
+          }
+
+          final lateMin = summary['late_minutes'] ?? 0;
+          final grossMin = summary['gross_minutes'] ?? 0;
+          final effectiveMin = summary['effective_minutes'] ?? 0;
+          final breakMin = summary['break_minutes'] ?? 0;
+
+          final lateH = lateMin ~/ 60;
+          final lateM = lateMin % 60;
+          final grossH = grossMin ~/ 60;
+          final grossM = grossMin % 60;
+          final effectiveH = effectiveMin ~/ 60;
+          final effectiveM = effectiveMin % 60;
+          final breakH = breakMin ~/ 60;
+          final breakM = breakMin % 60;
+
+          showDialog(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: Text(
+                'Time Summary - $dateString',
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _SummaryRow(
+                    icon: Icons.schedule,
+                    color: Colors.red,
+                    label: 'Late Time',
+                    value: lateMin > 0 ? '${lateH}h ${lateM}m' : 'On Time',
+                  ),
+                  const SizedBox(height: 12),
+                  _SummaryRow(
+                    icon: Icons.access_time,
+                    color: Colors.blue,
+                    label: 'Gross Time',
+                    value: '${grossH}h ${grossM}m',
+                  ),
+                  const SizedBox(height: 12),
+                  _SummaryRow(
+                    icon: Icons.timer,
+                    color: Colors.green,
+                    label: 'Effective Time',
+                    value: '${effectiveH}h ${effectiveM}m',
+                  ),
+                  const SizedBox(height: 12),
+                  _SummaryRow(
+                    icon: Icons.coffee,
+                    color: Colors.orange,
+                    label: 'Break Time',
+                    value: '${breakH}h ${breakM}m',
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Close'),
+                ),
+              ],
+            ),
+          );
+        } else {
+          _showSnack(data['msg'] ?? 'Failed to fetch day summary');
+        }
+      } else {
+        _showSnack('Failed to fetch day summary');
+      }
+    } catch (e) {
+      Navigator.of(context).pop(); // Close loading if error
+      _showSnack('Error fetching day summary');
+    }
   }
 
   String _monthShort(int m) {
@@ -1976,6 +2199,34 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
       "DEC",
     ];
     return months[m - 1];
+  }
+
+  // ---- Wishes helpers ----
+  String _wishTag(Map<String, dynamic> e) {
+    final type = (e['type'] ?? 'birthday') as String;
+    if (type == 'birthday') return "B'DAY";
+    final years = (e['years'] is int)
+        ? e['years'] as int
+        : int.tryParse('${e['years'] ?? 0}') ?? 0;
+    if (years <= 0) return 'ANN';
+    return years == 1 ? '1 YR' : '$years YRS';
+  }
+
+  String _wishDateLabel(Map<String, dynamic> e) {
+    try {
+      final daysUntil = (e['days_until'] is int)
+          ? e['days_until'] as int
+          : int.tryParse('${e['days_until'] ?? 0}') ?? 0;
+      if (daysUntil == 0) return 'Today';
+      final s = (e['date'] ?? '') as String;
+      if (s.isEmpty) return '';
+      final d = DateTime.parse(s);
+      final mm = _monthShort(d.month);
+      final dd = d.day.toString().padLeft(2, '0');
+      return '$dd $mm';
+    } catch (_) {
+      return '';
+    }
   }
 
   // Convert 24-hour time to Indian 12-hour format (AM/PM)
@@ -2092,7 +2343,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
           child: SingleChildScrollView(
             physics:
                 const AlwaysScrollableScrollPhysics(), // Enable scroll even when content fits
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -2110,7 +2361,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                     fontWeight: FontWeight.w700,
                   ),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 12),
 
                 // BIG SHIFT CARD
                 Container(
@@ -2175,7 +2426,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                         ],
                       ),
 
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 12),
 
                       // middle row circle + in/out
                       Row(
@@ -2216,9 +2467,14 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                                     ),
                                     const SizedBox(height: 2),
                                     Text(
-                                      clockOutTime != null
-                                          ? "Completed"
-                                          : "In Progress",
+                                      // Status text inside the circle
+                                      // Show "Completed" only when fully clocked out (not lunch)
+                                      clockOutTime != null &&
+                                          lastPunchReason != 'lunch'
+                                        ? "Completed"
+                                        : (clockInTime != null
+                                          ? "In Progress"
+                                          : "Not Started"),
                                       style: const TextStyle(
                                         fontSize: 11,
                                         color: Colors.grey,
@@ -2296,7 +2552,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                         ],
                       ),
 
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 12),
 
                       // main button
                       SizedBox(
@@ -2329,78 +2585,161 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                   ),
                 ),
 
-                const SizedBox(height: 20),
-
-                // QUICK ACTIONS
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: const [
-                    _QuickAction(
-                      icon: Icons.flight_takeoff,
-                      label: "Apply\nLeave",
-                    ),
-                    _QuickAction(
-                      icon: Icons.home_work_outlined,
-                      label: "Apply\nWFH",
-                    ),
-                    _QuickAction(
-                      icon: Icons.receipt_long_outlined,
-                      label: "View\nPayslip",
-                    ),
-                    _QuickAction(
-                      icon: Icons.confirmation_num_outlined,
-                      label: "Raise\nTicket",
-                    ),
-                    _QuickAction(
-                      icon: Icons.account_balance_wallet_outlined,
-                      label: "Leave\nBalance",
-                    ),
-                  ],
-                ),
-
-                const SizedBox(height: 24),
-
-                // WISH THEM
-                const Text(
-                  "Wish them",
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-                ),
                 const SizedBox(height: 12),
-                SizedBox(
-                  height: 80,
-                  child: ListView(
-                    scrollDirection: Axis.horizontal,
+
+                // QUICK ACTIONS (boxed section)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(24),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.05),
+                        blurRadius: 12,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: const [
-                      _WishChip(label: "Nilesh", tag: "3 YRS", date: "09 Dec"),
-                      _WishChip(label: "Yankit", tag: "NEW", date: "10 Dec"),
-                      _WishChip(label: "Nilesh", tag: "B'DAY", date: "20 Dec"),
-                      _WishChip(label: "Chand", tag: "1 YR", date: "01 Jan"),
+                      _QuickAction(
+                        icon: Icons.flight_takeoff,
+                        label: "Apply\nLeave",
+                      ),
+                      _QuickAction(
+                        icon: Icons.receipt_long_outlined,
+                        label: "View\nPayslip",
+                      ),
+                      _QuickAction(
+                        icon: Icons.confirmation_num_outlined,
+                        label: "Raise\nTicket",
+                      ),
+                      _QuickAction(
+                        icon: Icons.account_balance_wallet_outlined,
+                        label: "Leave\nBalance",
+                      ),
                     ],
                   ),
                 ),
 
-                const SizedBox(height: 24),
-
-                // WEEKLY TIME LOG
-                const Text(
-                  "Weekly Time Log",
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-                ),
                 const SizedBox(height: 12),
-                SizedBox(
-                  height: 90,
-                  child: ListView.separated(
-                    scrollDirection: Axis.horizontal,
-                    itemBuilder: (context, index) {
-                      final dayInfo = _weekDayInfo(index);
-                      return _DayChip(
-                        label: dayInfo.label,
-                        date: dayInfo.dateLabel,
-                        isToday: dayInfo.isToday,
-                      );
-                    },
-                    separatorBuilder: (_, _) => const SizedBox(width: 8),
-                    itemCount: 7,
+
+                // WISH THEM (boxed section)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(24),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.05),
+                        blurRadius: 12,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        "Wish them",
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        height: 90,
+                        child: (wishesLoading)
+                            ? const Center(
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : (wishes.isEmpty)
+                                ? const Align(
+                                    alignment: Alignment.centerLeft,
+                                    child: Text(
+                                      "No upcoming birthdays or anniversaries",
+                                      style: TextStyle(
+                                        color: Colors.grey,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  )
+                                : ListView.builder(
+                                    scrollDirection: Axis.horizontal,
+                                    itemCount: wishes.length,
+                                    itemBuilder: (context, index) {
+                                      final e = wishes[index];
+                                      final name =
+                                          (e['name'] ?? 'Employee') as String;
+                                      final tag = _wishTag(e);
+                                      final date = _wishDateLabel(e);
+                                      return _WishChip(
+                                        label: name,
+                                        tag: tag,
+                                        date: date,
+                                      );
+                                    },
+                                  ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 12),
+
+                // WEEKLY TIME LOG (boxed section)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(24),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.05),
+                        blurRadius: 12,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        "Weekly Time Log",
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        height: 80,
+                        child: ListView.separated(
+                          scrollDirection: Axis.horizontal,
+                          itemBuilder: (context, index) {
+                            final dayInfo = _weekDayInfo(index);
+                            return GestureDetector(
+                              onTap: () => _showDaySummary(dayInfo.dateString),
+                              child: _DayChip(
+                                label: dayInfo.label,
+                                date: dayInfo.dateLabel,
+                                isToday: dayInfo.isToday,
+                              ),
+                            );
+                          },
+                          separatorBuilder: (_, __) => const SizedBox(width: 8),
+                          itemCount: 7,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
 
@@ -2547,7 +2886,182 @@ class _WeekDayInfo {
   final String label;
   final String dateLabel;
   final bool isToday;
-  _WeekDayInfo(this.label, this.dateLabel, this.isToday);
+  final String dateString;
+  _WeekDayInfo(this.label, this.dateLabel, this.isToday, this.dateString);
+}
+
+// Custom painter for the work + break segmented circle
+class _WorkBreakCirclePainter extends CustomPainter {
+  final double lateFraction; // 0..1
+  final double workBeforeFraction; // 0..1
+  final double lunchFraction; // 0..1
+  final double workAfterFraction; // 0..1
+  final double earlyFraction; // 0..1
+  final Color workColor;
+  final Color breakColor;
+  final Color lateColor;
+  final Color earlyColor;
+  final Color backgroundColor;
+  final double strokeWidth;
+
+  _WorkBreakCirclePainter({
+    required this.lateFraction,
+    required this.workBeforeFraction,
+    required this.lunchFraction,
+    required this.workAfterFraction,
+    required this.earlyFraction,
+    required this.workColor,
+    required this.breakColor,
+    required this.lateColor,
+    required this.earlyColor,
+    required this.backgroundColor,
+    required this.strokeWidth,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = (size.width < size.height ? size.width : size.height) / 2 - strokeWidth / 2;
+
+    final rect = Rect.fromCircle(center: center, radius: radius);
+    const startAngle = -pi / 2; // start at top
+
+    // Base track
+    final backgroundPaint = Paint()
+      ..color = backgroundColor
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth
+      ..strokeCap = StrokeCap.round;
+
+    canvas.drawArc(rect, 0, 2 * pi, false, backgroundPaint);
+
+    double currentStart = startAngle;
+
+    // Late segment
+    if (lateFraction > 0) {
+      final latePaint = Paint()
+        ..color = lateColor
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = strokeWidth
+        ..strokeCap = StrokeCap.round;
+      final lateSweep = 2 * pi * lateFraction;
+      canvas.drawArc(rect, currentStart, lateSweep, false, latePaint);
+      currentStart += lateSweep;
+    }
+
+    if (workBeforeFraction > 0) {
+      final workPaint = Paint()
+        ..color = workColor
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = strokeWidth
+        ..strokeCap = StrokeCap.round;
+      final workSweep = 2 * pi * workBeforeFraction;
+      canvas.drawArc(rect, currentStart, workSweep, false, workPaint);
+      currentStart += workSweep;
+    }
+
+    if (lunchFraction > 0) {
+      final breakPaint = Paint()
+        ..color = breakColor
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = strokeWidth
+        ..strokeCap = StrokeCap.round;
+      final breakSweep = 2 * pi * lunchFraction;
+      canvas.drawArc(rect, currentStart, breakSweep, false, breakPaint);
+      currentStart += breakSweep;
+    }
+
+    if (workAfterFraction > 0) {
+      final workPaint = Paint()
+        ..color = workColor
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = strokeWidth
+        ..strokeCap = StrokeCap.round;
+      final workSweep = 2 * pi * workAfterFraction;
+      canvas.drawArc(rect, currentStart, workSweep, false, workPaint);
+      currentStart += workSweep;
+    }
+
+    // Early-leave segment at the end
+    if (earlyFraction > 0) {
+      final earlyPaint = Paint()
+        ..color = earlyColor
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = strokeWidth
+        ..strokeCap = StrokeCap.round;
+      final earlySweep = 2 * pi * earlyFraction;
+      canvas.drawArc(rect, currentStart, earlySweep, false, earlyPaint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _WorkBreakCirclePainter oldDelegate) {
+    return lateFraction != oldDelegate.lateFraction ||
+        workBeforeFraction != oldDelegate.workBeforeFraction ||
+        lunchFraction != oldDelegate.lunchFraction ||
+        workAfterFraction != oldDelegate.workAfterFraction ||
+        earlyFraction != oldDelegate.earlyFraction ||
+        workColor != oldDelegate.workColor ||
+        breakColor != oldDelegate.breakColor ||
+        lateColor != oldDelegate.lateColor ||
+        earlyColor != oldDelegate.earlyColor ||
+        backgroundColor != oldDelegate.backgroundColor ||
+        strokeWidth != oldDelegate.strokeWidth;
+  }
+}
+
+class _SummaryRow extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final String label;
+  final String value;
+
+  const _SummaryRow({
+    required this.icon,
+    required this.color,
+    required this.label,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(icon, color: color, size: 20),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                value,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
 }
 
 // ------------------- DEVICE HELPER (DEVICE-LOCK) -------------------
@@ -2585,14 +3099,22 @@ class DeviceHelper {
 class LocationResult {
   final Position position;
   final bool inside;
-  LocationResult(this.position, this.inside);
+  final double distanceMeters; // Distance from office center
+  final double radiusMeters; // Allowed radius
+
+  LocationResult(
+    this.position,
+    this.inside,
+    this.distanceMeters,
+    this.radiusMeters,
+  );
 }
 
 class LocationHelper {
   // OFFICE LOCATION (cached from server, fallback defaults)
-  static double _officeLat = 20.420399;
-  static double _officeLng = 72.870863;
-  static double _radiusM = 150.0; // meters (default 150m)
+  static double _officeLat = 0.0;
+  static double _officeLng = 0.0;
+  static double _radiusM = 0.0; // meters (configured via admin)
   static bool _prefsLoaded = false;
 
   // Note: No caching - always use fresh GPS for security
@@ -2601,9 +3123,9 @@ class LocationHelper {
   static Future<void> loadFromPrefs() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      _officeLat = prefs.getDouble('office_lat') ?? 20.420399;
-      _officeLng = prefs.getDouble('office_lng') ?? 72.870863;
-      _radiusM = prefs.getDouble('office_radius') ?? 150.0;
+      _officeLat = prefs.getDouble('office_lat') ?? 0.0;
+      _officeLng = prefs.getDouble('office_lng') ?? 0.0;
+      _radiusM = prefs.getDouble('office_radius') ?? 0.0;
       _prefsLoaded = true;
     } catch (_) {
       // fallback to defaults
@@ -2671,7 +3193,7 @@ class LocationHelper {
     );
 
     final inside = dist <= _radiusM;
-    return LocationResult(pos, inside);
+    return LocationResult(pos, inside, dist, _radiusM);
   }
 
   // Legacy method (kept for backward compatibility but not using cache)
@@ -2696,96 +3218,6 @@ class LocationHelper {
     } catch (_) {
       return null;
     }
-  }
-}
-
-// ------------------- SEGMENTED PROGRESS PAINTER -------------------
-
-class _SegmentedProgressPainter extends CustomPainter {
-  final double beforeLunch;
-  final double lunch;
-  final double afterLunch;
-
-  _SegmentedProgressPainter({
-    required this.beforeLunch,
-    required this.lunch,
-    required this.afterLunch,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    final radius = (size.width - 10) / 2;
-    final strokeWidth = 10.0;
-
-    // Draw background circle
-    final backgroundPaint = Paint()
-      ..color = const Color(0xFFE5E7EB)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = strokeWidth
-      ..strokeCap = StrokeCap.round;
-    canvas.drawCircle(center, radius, backgroundPaint);
-
-    // Draw blue segment: Work before lunch
-    if (beforeLunch > 0) {
-      final beforeLunchPaint = Paint()
-        ..color = const Color(0xFF6366F1)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = strokeWidth
-        ..strokeCap = StrokeCap.round;
-      final beforeLunchSweep = 2 * 3.14159 * beforeLunch;
-      canvas.drawArc(
-        Rect.fromCircle(center: center, radius: radius),
-        -3.14159 / 2, // Start from top (12 o'clock)
-        beforeLunchSweep,
-        false,
-        beforeLunchPaint,
-      );
-    }
-
-    // Draw yellow segment: Lunch break
-    if (lunch > 0) {
-      final lunchPaint = Paint()
-        ..color = const Color(0xFFFFA500)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = strokeWidth
-        ..strokeCap = StrokeCap.round;
-      final lunchSweep = 2 * 3.14159 * lunch;
-      final lunchStart = -3.14159 / 2 + (2 * 3.14159 * beforeLunch);
-      canvas.drawArc(
-        Rect.fromCircle(center: center, radius: radius),
-        lunchStart,
-        lunchSweep,
-        false,
-        lunchPaint,
-      );
-    }
-
-    // Draw blue segment: Work after lunch
-    if (afterLunch > 0) {
-      final afterLunchPaint = Paint()
-        ..color = const Color(0xFF6366F1)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = strokeWidth
-        ..strokeCap = StrokeCap.round;
-      final afterLunchSweep = 2 * 3.14159 * afterLunch;
-      final afterLunchStart =
-          -3.14159 / 2 + (2 * 3.14159 * (beforeLunch + lunch));
-      canvas.drawArc(
-        Rect.fromCircle(center: center, radius: radius),
-        afterLunchStart,
-        afterLunchSweep,
-        false,
-        afterLunchPaint,
-      );
-    }
-  }
-
-  @override
-  bool shouldRepaint(_SegmentedProgressPainter oldDelegate) {
-    return oldDelegate.beforeLunch != beforeLunch ||
-        oldDelegate.lunch != lunch ||
-        oldDelegate.afterLunch != afterLunch;
   }
 }
 
