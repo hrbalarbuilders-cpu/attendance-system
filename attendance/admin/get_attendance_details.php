@@ -11,11 +11,21 @@ if ($emp_id <= 0 || $date === '') {
     exit;
 }
 
-// Get employee info
-$empStmt = $con->prepare("SELECT e.id, e.name, e.emp_code, desig.designation_name 
-                          FROM employees e 
-                          LEFT JOIN designations desig ON desig.id = e.designation_id 
-                          WHERE e.id = ?");
+// Get employee info along with shift details (if any)
+$empStmt = $con->prepare("SELECT 
+                                                        e.id, 
+                                                        e.name, 
+                                                        e.emp_code, 
+                                                        desig.designation_name,
+                                                        s.start_time AS shift_start_time,
+                                                        s.end_time AS shift_end_time,
+                                                        s.late_mark_after AS shift_late_mark_after,
+                                                        s.lunch_start AS shift_lunch_start,
+                                                        s.lunch_end AS shift_lunch_end
+                                                    FROM employees e 
+                                                    LEFT JOIN designations desig ON desig.id = e.designation_id 
+                                                    LEFT JOIN shifts s ON s.id = e.shift_id
+                                                    WHERE e.id = ?");
 $empStmt->bind_param("i", $emp_id);
 $empStmt->execute();
 $empResult = $empStmt->get_result();
@@ -56,6 +66,18 @@ while ($log = $logResult->fetch_assoc()) {
     ];
 }
 
+// Prepare shift information for the response (times formatted as HH:MM where available)
+$shift = null;
+if (!empty($employee['shift_start_time']) && !empty($employee['shift_end_time'])) {
+    $shift = [
+        'start_time' => date('H:i', strtotime($employee['shift_start_time'])),
+        'end_time' => date('H:i', strtotime($employee['shift_end_time'])),
+        'late_mark_after' => isset($employee['shift_late_mark_after']) ? (int)$employee['shift_late_mark_after'] : 0,
+        'lunch_start' => !empty($employee['shift_lunch_start']) ? date('H:i', strtotime($employee['shift_lunch_start'])) : null,
+        'lunch_end' => !empty($employee['shift_lunch_end']) ? date('H:i', strtotime($employee['shift_lunch_end'])) : null,
+    ];
+}
+
 echo json_encode([
     'success' => true,
     'employee' => [
@@ -64,6 +86,7 @@ echo json_encode([
         'emp_code' => $employee['emp_code']
     ],
     'date' => $date,
-    'logs' => $logs
+    'logs' => $logs,
+    'shift' => $shift
 ]);
 

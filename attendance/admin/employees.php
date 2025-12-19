@@ -552,42 +552,56 @@ if ($empRes && $empRes->num_rows > 0) {
 
                             <!-- Clock In Status -->
                             <div class="mb-4" id="clockInBox" style="display:none;">
-                                <div class="rounded-3 p-3 text-white" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%);">
-                                    <div class="small mb-1">Clock In</div>
-                                    <div class="h4 mb-2 fw-bold" id="clockInTime">--:-- --</div>
-                                    <div class="small" id="clockInGreeting">Good morning! 👋</div>
-                                </div>
+                              <div class="rounded-3 p-3 text-white" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%);">
+                                <div class="small mb-1">Clock In</div>
+                                <div class="h4 mb-2 fw-bold" id="clockInTime">--:-- --</div>
+                                <div class="small" id="clockInGreeting">Good morning! 👋</div>
+                              </div>
                             </div>
 
-                            <!-- Clock Out Status -->
-                            <div class="mb-4" id="clockOutBox" style="display:none;">
-                                <div class="rounded-3 p-3 text-white" style="background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);">
-                                    <div class="small mb-1">Clock Out</div>
-                                    <div class="h4 mb-2 fw-bold" id="clockOutTime">--:-- --</div>
-                                    <div class="small" id="clockOutGreeting">Have a great day! 👋</div>
+                            <!-- Total Work (circle) -->
+                            <div class="mb-4 text-center" id="totalWorkBox" style="display:none;">
+                              <div class="position-relative d-inline-block" style="width: 150px; height: 150px;">
+                                <svg class="transform-rotate-90" width="150" height="150">
+                                  <!-- Base track -->
+                                  <circle cx="75" cy="75" r="70" stroke="#E5E7EB" stroke-width="8" fill="none"/>
+                                  <!-- Work (blue) -->
+                                  <circle cx="75" cy="75" r="70" stroke="#6366F1" stroke-width="8" fill="none"
+                                    stroke-dasharray="440" stroke-dashoffset="0" id="workProgressCircle"
+                                    stroke-linecap="round" style="transition: stroke-dashoffset 0.5s;"/>
+                                  <!-- Break (yellow) -->
+                                  <circle cx="75" cy="75" r="70" stroke="#FACC15" stroke-width="8" fill="none"
+                                    stroke-dasharray="440" stroke-dashoffset="0" id="breakProgressCircle"
+                                    stroke-linecap="round" style="transition: stroke-dashoffset 0.5s; display:none;">
+                                    <title id="breakTooltip"></title>
+                                  </circle>
+                                  <!-- Late (orange/red) -->
+                                  <circle cx="75" cy="75" r="70" stroke="#F97373" stroke-width="8" fill="none"
+                                    stroke-dasharray="440" stroke-dashoffset="0" id="lateProgressCircle"
+                                    stroke-linecap="round" style="transition: stroke-dashoffset 0.5s; display:none;">
+                                    <title id="lateTooltip"></title>
+                                  </circle>
+                                </svg>
+                                <div class="position-absolute top-50 start-50 translate-middle text-center">
+                                  <div class="small text-muted">Effective Work</div>
+                                  <div class="fw-bold" id="totalWorkTime">0hr 0min</div>
                                 </div>
+                              </div>
+                              <!-- Text summary below circle -->
+                              <div class="mt-2 small text-muted">
+                                <div id="grossWorkTime" style="display:none;">Gross: 0hr 0min</div>
+                                <div id="breakTime" class="text-warning" style="display:none;"></div>
+                              </div>
                             </div>
 
-                            <!-- Total Work -->
-                            <div class="text-center" id="totalWorkBox" style="display:none;">
-                                <div class="position-relative d-inline-block" style="width: 150px; height: 150px;">
-                                    <svg class="transform-rotate-90" width="150" height="150">
-                                        <circle cx="75" cy="75" r="70" stroke="#e5e7eb" stroke-width="8" fill="none"/>
-                                        <circle cx="75" cy="75" r="70" stroke="#06b6d4" stroke-width="8" fill="none"
-                                                stroke-dasharray="440" stroke-dashoffset="0" id="workProgressCircle"
-                                                stroke-linecap="round" style="transition: stroke-dashoffset 0.5s;"/>
-                                        <circle cx="75" cy="75" r="70" stroke="#f59e0b" stroke-width="8" fill="none"
-                                                stroke-dasharray="440" stroke-dashoffset="0" id="breakProgressCircle"
-                                                stroke-linecap="round" style="transition: stroke-dashoffset 0.5s; display:none;"/>
-                                    </svg>
-                                    <div class="position-absolute top-50 start-50 translate-middle text-center">
-                                        <div class="small text-muted">Effective Work</div>
-                                        <div class="h5 fw-bold text-info mb-0" id="totalWorkTime">0hr 0min</div>
-                                        <div class="small text-muted mt-1" id="grossWorkTime" style="display:none;">Gross: 0hr 0min</div>
-                                        <div class="small text-warning mt-1" id="breakTime" style="display:none;">Break: 0hr 0min</div>
+                                  <!-- Clock Out Status -->
+                                  <div class="mb-4" id="clockOutBox" style="display:none;">
+                                    <div class="rounded-3 p-3 text-white" style="background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);">
+                                      <div class="small mb-1">Clock Out</div>
+                                      <div class="h4 mb-2 fw-bold" id="clockOutTime">--:-- --</div>
+                                      <div class="small" id="clockOutGreeting">Have a great day! 👋</div>
                                     </div>
-                                </div>
-                            </div>
+                                  </div>
                         </div>
 
                         <!-- Right Side: Date & Activity Timeline -->
@@ -1120,20 +1134,24 @@ document.addEventListener("submit", function (e) {
         const totalWorkTime = document.getElementById('totalWorkTime');
         const grossWorkTime = document.getElementById('grossWorkTime');
         const breakTime = document.getElementById('breakTime');
+        const breakTooltip = document.getElementById('breakTooltip');
+        const lateTooltip = document.getElementById('lateTooltip');
         const workProgressCircle = document.getElementById('workProgressCircle');
         const breakProgressCircle = document.getElementById('breakProgressCircle');
+        const lateProgressCircle = document.getElementById('lateProgressCircle');
         
         if (inLogs.length > 0 && outLogs.length > 0 && totalWorkBox && totalWorkTime && workProgressCircle) {
-            const firstIn = new Date(inLogs[0].time);
-            const lastOut = new Date(outLogs[outLogs.length - 1].time);
+          const firstInTime = new Date(inLogs[0].time);
+          const lastOut = new Date(outLogs[outLogs.length - 1].time);
             
             // Calculate gross hours (total time from first in to last out)
-            const grossMs = lastOut - firstIn;
+            const grossMs = lastOut - firstInTime;
             const grossHours = Math.floor(grossMs / (1000 * 60 * 60));
             const grossMinutes = Math.floor((grossMs % (1000 * 60 * 60)) / (1000 * 60));
             
             // Calculate break time (time between out with lunch/tea reason and next in)
             let totalBreakMs = 0;
+            let firstBreakOffsetMs = null; // offset from first IN to first break start
             for (let i = 0; i < activities.length - 1; i++) {
                 const current = activities[i];
                 const next = activities[i + 1];
@@ -1145,7 +1163,24 @@ document.addEventListener("submit", function (e) {
                     const breakStart = new Date(current.time);
                     const breakEnd = new Date(next.time);
                     totalBreakMs += (breakEnd - breakStart);
+
+                    if (firstBreakOffsetMs === null) {
+                      firstBreakOffsetMs = breakStart - firstInTime;
+                    }
                 }
+            }
+
+            // Calculate late time based on shift start (if available)
+            let lateMs = 0;
+            if (data.shift && data.shift.start_time) {
+              try {
+                const shiftStart = new Date(data.date + 'T' + data.shift.start_time + ':00');
+                if (firstInTime > shiftStart) {
+                  lateMs = firstInTime - shiftStart;
+                }
+              } catch (e) {
+                lateMs = 0;
+              }
             }
             
             const breakHours = Math.floor(totalBreakMs / (1000 * 60 * 60));
@@ -1156,6 +1191,27 @@ document.addEventListener("submit", function (e) {
             const effectiveHours = Math.floor(effectiveMs / (1000 * 60 * 60));
             const effectiveMinutes = Math.floor((effectiveMs % (1000 * 60 * 60)) / (1000 * 60));
             
+            // Split effective work into before/after first break
+            let workBeforeMs = 0;
+            let workAfterMs = 0;
+            if (firstBreakOffsetMs !== null && totalBreakMs > 0 && firstBreakOffsetMs > 0) {
+              workBeforeMs = Math.min(firstBreakOffsetMs, effectiveMs);
+              if (workBeforeMs < 0) workBeforeMs = 0;
+              workAfterMs = Math.max(effectiveMs - workBeforeMs, 0);
+            } else {
+              workBeforeMs = effectiveMs;
+              workAfterMs = 0;
+            }
+
+            const totalSpanMs = lateMs + workBeforeMs + totalBreakMs + workAfterMs;
+            let lateFraction = 0, workBeforeFraction = 0, lunchFraction = 0, workAfterFraction = 0;
+            if (totalSpanMs > 0) {
+              lateFraction = lateMs / totalSpanMs;
+              workBeforeFraction = workBeforeMs / totalSpanMs;
+              lunchFraction = totalBreakMs / totalSpanMs;
+              workAfterFraction = workAfterMs / totalSpanMs;
+            }
+
             // Display effective work time
             totalWorkTime.textContent = effectiveHours + 'hr ' + effectiveMinutes + 'min';
             
@@ -1167,28 +1223,61 @@ document.addEventListener("submit", function (e) {
                 if (grossWorkTime) grossWorkTime.style.display = 'none';
             }
             
-            // Display break time if breaks exist
-            if (totalBreakMs > 0 && breakTime) {
-                breakTime.textContent = 'Break: ' + breakHours + 'hr ' + breakMinutes + 'min';
-                breakTime.style.display = 'block';
-            } else {
-                if (breakTime) breakTime.style.display = 'none';
+            // Set break tooltip text if breaks exist
+            if (totalBreakMs > 0 && breakTooltip) {
+              breakTooltip.textContent = 'Break: ' + breakHours + 'hr ' + breakMinutes + 'min';
+            } else if (breakTooltip) {
+              breakTooltip.textContent = '';
             }
             
-            // Calculate progress for pie chart (effective work out of 8 hours)
-            const progress = Math.min((effectiveMs / (8 * 60 * 60 * 1000)) * 100, 100);
+            // Base circle metrics
             const circumference = 2 * Math.PI * 70;
-            const workOffset = circumference - (progress / 100) * circumference;
+
+            // Always show blue work ring when there is any gross time
+            const hasWork = grossMs > 0;
+            const workOffset = hasWork ? 0 : circumference;
+            workProgressCircle.style.strokeDasharray = `${circumference}`;
             workProgressCircle.style.strokeDashoffset = workOffset;
             
-            // Show break segment in pie chart if breaks exist
-            if (totalBreakMs > 0 && breakProgressCircle) {
-                const breakProgress = Math.min((totalBreakMs / (8 * 60 * 60 * 1000)) * 100, 100);
-                const breakOffset = workOffset - ((breakProgress / 100) * circumference);
-                breakProgressCircle.style.strokeDashoffset = breakOffset;
-                breakProgressCircle.style.display = 'block';
+            // Show break segment in pie chart if breaks exist (hover tooltip only)
+            if (totalBreakMs > 0 && breakProgressCircle && totalSpanMs > 0) {
+              const grossArcLength = circumference; // blue ring is full
+
+              // Break arc based on lunch fraction and position after late + work-before-lunch
+              const breakArcLength = grossArcLength * lunchFraction;
+              const breakStartFraction = lateFraction + workBeforeFraction;
+              const breakStartWithinGross = breakStartFraction * grossArcLength;
+
+              const breakDashOffset = circumference - (breakStartWithinGross + breakArcLength);
+              breakProgressCircle.style.strokeDasharray = `${breakArcLength} ${circumference}`;
+              breakProgressCircle.style.strokeDashoffset = breakDashOffset;
+              breakProgressCircle.style.display = 'block';
             } else {
-                if (breakProgressCircle) breakProgressCircle.style.display = 'none';
+              if (breakProgressCircle) breakProgressCircle.style.display = 'none';
+              if (breakTime) {
+                breakTime.style.display = 'none';
+                breakTime.textContent = '';
+              }
+            }
+
+            // --- Late segment (before first IN, based on shift start) ---
+            if (lateProgressCircle && lateTooltip && lateMs > 0 && totalSpanMs > 0) {
+              const lateArcLength = lateFraction * circumference;
+              const lateDashOffset = circumference - lateArcLength; // starts at top
+
+              lateProgressCircle.style.strokeDasharray = `${lateArcLength} ${circumference}`;
+              lateProgressCircle.style.strokeDashoffset = lateDashOffset;
+              lateProgressCircle.style.display = 'block';
+
+              const lateHours = Math.floor(lateMs / (1000 * 60 * 60));
+              const lateMinutes = Math.floor((lateMs % (1000 * 60 * 60)) / (1000 * 60));
+              let lateLabel = 'Late: ';
+              if (lateHours > 0) lateLabel += `${lateHours}hr `;
+              lateLabel += `${lateMinutes}min`;
+              lateTooltip.textContent = lateLabel;
+            } else if (lateProgressCircle && lateTooltip) {
+              lateProgressCircle.style.display = 'none';
+              lateTooltip.textContent = '';
             }
             
             totalWorkBox.style.display = 'block';
