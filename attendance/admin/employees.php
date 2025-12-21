@@ -3,6 +3,8 @@
 date_default_timezone_set('Asia/Kolkata');
 include 'db.php';
 
+include 'header.php';
+
 // flags for toast messages (delete / update)
 $deleted = isset($_GET['deleted']) ? 1 : 0;
 $updated = isset($_GET['updated']) ? 1 : 0;
@@ -52,6 +54,45 @@ if (empty($workingFromOptions)) {
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    <style>
+      .header-fixed {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        z-index: 2000;
+        background: white;
+        border-bottom: 1px solid #e5e7eb;
+        padding: 12px 20px;
+        display: flex;
+        align-items: center;
+        gap: 20px;
+      }
+      .main-content-scroll {
+        margin-top: 56px;
+        /* Adjust if header height changes */
+      }
+      .apps-btn {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        background: none;
+        border: none;
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        padding: 8px;
+        border-radius: 6px;
+        transition: background 0.2s;
+      }
+      .apps-btn:hover {
+        background: #f3f4f6;
+      }
+      .menu-icon {
+        width: 18px;
+        height: 18px;
+      }
+    </style>
   <meta charset="UTF-8">
   <title>Employees</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -241,6 +282,8 @@ if (empty($workingFromOptions)) {
   </style>
 </head>
 <body>
+
+  <div class="main-content-scroll">
 
 <!-- loader -->
 <div id="loaderOverlay" class="d-none">
@@ -1932,5 +1975,6 @@ document.addEventListener("submit", function (e) {
 })();
 </script>
 
+  </div>
 </body>
 </html>

@@ -2,6 +2,7 @@
 // settings.php
 date_default_timezone_set('Asia/Kolkata');
 include 'db.php';
+include 'header.php';
 
 // -------------- FETCH CURRENT LOCATION SETTINGS (default) --------------
 $location = [
@@ -92,6 +93,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['location_form'])) {
       gap: 16px;
       align-items: center;
     }
+    .main-content-scroll {
+      margin-top: 72px;
+      /* Increased to clear fixed header and prevent top content/button from being cut off */
+    }
     .top-nav-pill {
       padding: 8px 20px;
       border-radius: 6px;
@@ -123,7 +128,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['location_form'])) {
   </style>
 </head>
 <body>
-<div class="container py-4 d-flex justify-content-center">
+<div class="main-content-scroll container py-4 d-flex justify-content-center">
   <div class="settings-wrapper w-100">
     <div class="d-flex justify-content-between align-items-center mb-3">
       <div>
