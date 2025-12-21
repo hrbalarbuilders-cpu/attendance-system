@@ -80,7 +80,7 @@ function renderDepartmentsContent($editDept, $list) {
                  required
                  value="<?php echo htmlspecialchars($editDept['department_name'] ?? ''); ?>">
         </div>
-        <button type="submit" class="btn btn-primary">
+        <button type="submit" class="btn btn-dark">
           <?php echo $editDept ? 'Update' : 'Save'; ?>
         </button>
         <?php if ($editDept) { ?>

@@ -20,6 +20,32 @@ $desigRes = $con->query("
 
 $shiftRes = $con->query("SELECT * FROM shifts ORDER BY shift_name ASC");
 
+// Working From options from master table
+$workingFromOptions = [];
+$wfCheck = $con->query("SHOW TABLES LIKE 'working_from_master'");
+if ($wfCheck && $wfCheck->num_rows > 0) {
+  $wfRes = $con->query("SELECT code, label FROM working_from_master WHERE is_active = 1 ORDER BY label ASC");
+  if ($wfRes && $wfRes->num_rows > 0) {
+    while ($wf = $wfRes->fetch_assoc()) {
+      $code  = trim((string)($wf['code'] ?? ''));
+      $label = trim((string)($wf['label'] ?? ''));
+      if ($code !== '') {
+        $workingFromOptions[] = [
+          'code'  => $code,
+          'label' => $label !== '' ? $label : ucfirst($code),
+        ];
+      }
+    }
+  }
+}
+if (empty($workingFromOptions)) {
+  $workingFromOptions = [
+    ['code' => 'office', 'label' => 'Office'],
+    ['code' => 'home',   'label' => 'Home'],
+    ['code' => 'client', 'label' => 'Client Site'],
+  ];
+}
+
 // ---------- Fetch current employee data ----------
 $stmt = $con->prepare("SELECT * FROM employees WHERE id = ?");
 $stmt->bind_param("i", $id);
@@ -55,8 +81,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $shift_id       = (int)($_POST['shift_id'] ?? 0);
     // Weekoff days is optional - if no checkboxes selected, set to NULL
     $weekoff_days   = isset($_POST['weekoff_days']) && !empty($_POST['weekoff_days']) 
-                      ? implode(',', $_POST['weekoff_days']) 
-                      : null;
+          ? implode(',', $_POST['weekoff_days']) 
+          : null;
+    $default_working_from = trim($_POST['default_working_from'] ?? ($employee['default_working_from'] ?? ''));
     $reset_device   = !empty($_POST['reset_device']); // button se 1 aayega
 
     // Basic validation
@@ -72,6 +99,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($shift_id <= 0) {
         $errors[] = "Please select a shift.";
     }
+    if ($default_working_from === '') {
+      $errors[] = "Please select Working From.";
+    }
     if (!$joining_date) {
         $errors[] = "Joining date is required.";
     }
@@ -83,26 +113,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($reset_device) {
             // ✅ Sirf employees table ka device_id reset
             $sql = "
-                UPDATE employees
-                SET name = ?, mobile = ?, email = ?, dob = ?, 
-                    department_id = ?, designation_id = ?, shift_id = ?, weekoff_days = ?, joining_date = ?, 
-                    device_id = NULL,
-                    updated_at = NOW()
-                WHERE id = ?
+              UPDATE employees
+              SET name = ?, mobile = ?, email = ?, dob = ?, 
+                department_id = ?, designation_id = ?, shift_id = ?, default_working_from = ?, weekoff_days = ?, joining_date = ?, 
+                device_id = NULL,
+                updated_at = NOW()
+              WHERE id = ?
             ";
         } else {
             $sql = "
                 UPDATE employees
-                SET name = ?, mobile = ?, email = ?, dob = ?, 
-                    department_id = ?, designation_id = ?, shift_id = ?, weekoff_days = ?, joining_date = ?, 
+              SET name = ?, mobile = ?, email = ?, dob = ?, 
+                department_id = ?, designation_id = ?, shift_id = ?, default_working_from = ?, weekoff_days = ?, joining_date = ?, 
                     updated_at = NOW()
                 WHERE id = ?
             ";
         }
 
         $stmtUpd = $con->prepare($sql);
-        $stmtUpd->bind_param(
-            "ssssiiissi",
+          $stmtUpd->bind_param(
+            "ssssiiisssi",
             $name,
             $mobile,
             $email,
@@ -110,10 +140,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $department_id,
             $designation_id,
             $shift_id,
+            $default_working_from,
             $weekoff_days,
             $joining_date,
             $id
-        );
+          );
 
         if ($stmtUpd->execute()) {
             header("Location: employees.php?updated=1");
@@ -268,6 +299,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['weekoff_days'])) {
             </select>
           </div>
 
+          <!-- Working From -->
+          <div class="col-md-6">
+            <label class="form-label">Working From</label>
+            <select name="default_working_from" class="form-select" required>
+              <option value="">Select Working From</option>
+              <?php
+              $curWf = old('default_working_from', $employee['default_working_from'] ?? '');
+              foreach ($workingFromOptions as $wf) {
+                  $selected = ($curWf === $wf['code']) ? 'selected' : '';
+              ?>
+                <option value="<?php echo htmlspecialchars($wf['code']); ?>" <?php echo $selected; ?>>
+                  <?php echo htmlspecialchars($wf['label']); ?>
+                </option>
+              <?php } ?>
+            </select>
+          </div>
+
           <!-- WEEK OFF DAYS -->
           <div class="col-md-6">
             <label class="form-label">Week Off Days</label>
@@ -312,7 +360,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['weekoff_days'])) {
         </div>
 
         <div class="mt-4">
-          <button type="submit" class="btn btn-primary">Save Changes</button>
+          <button type="submit" class="btn btn-dark">Save Changes</button>
           <a href="employees.php" class="btn btn-secondary ms-2">Cancel</a>
         </div>
       </form>

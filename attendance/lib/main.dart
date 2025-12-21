@@ -11,7 +11,7 @@ import 'package:path/path.dart' as p;
 import 'package:sqflite/sqflite.dart';
 
 const String baseUrl =
-    "http://172.22.22.51/attendance-system/attendance/attendance_api";
+  "http://192.168.1.142:8080/attendance/attendance_api";
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -128,7 +128,19 @@ class _LoginScreenState extends State<LoginScreen> {
         }
       } else {
         setState(() => _isLoading = false);
-        _showSnack("Server error. Please try again.");
+
+        // Try to extract a useful message from non-200 responses
+        String message = "Server error (${response.statusCode}). Please try again.";
+        try {
+          final decoded = jsonDecode(response.body);
+          if (decoded is Map && decoded['msg'] is String) {
+            message = decoded['msg'] as String;
+          }
+        } catch (_) {
+          // If body is not JSON, keep the generic message
+        }
+
+        _showSnack(message);
       }
     } catch (e) {
       setState(() => _isLoading = false);

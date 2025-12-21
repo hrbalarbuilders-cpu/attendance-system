@@ -31,7 +31,7 @@ CREATE TABLE `attendance_logs` (
   `id` int(11) NOT NULL,
   `user_id` varchar(50) NOT NULL,
   `type` varchar(10) NOT NULL,
-  `working_from` enum('office','home','client') DEFAULT NULL,
+  `working_from` varchar(50) DEFAULT NULL,
   `reason` enum('lunch','tea','shift_start','shift_end') NOT NULL DEFAULT 'shift_start',
   `time` datetime NOT NULL,
   `device_id` varchar(100) NOT NULL,
@@ -46,6 +46,27 @@ CREATE TABLE `attendance_logs` (
 
 INSERT INTO `attendance_logs` (`id`, `user_id`, `type`, `working_from`, `reason`, `time`, `device_id`, `latitude`, `longitude`, `synced`) VALUES
 (111, '1', 'in', 'office', 'shift_start', '2025-12-11 03:51:36', 'AP3A.240905.015.A2', 20.396198, 72.880532, 1);
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `working_from_master`
+-- Stores the allowed "Working From" options used across the app.
+--
+
+CREATE TABLE `working_from_master` (
+  `id` int(11) NOT NULL,
+  `code` varchar(50) NOT NULL,
+  `label` varchar(100) NOT NULL,
+  `is_active` tinyint(1) NOT NULL DEFAULT 1,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+INSERT INTO `working_from_master` (`id`, `code`, `label`, `is_active`) VALUES
+(1, 'office', 'Office', 1),
+(2, 'home',   'Home',   1),
+(3, 'client', 'Client Site', 1);
 
 -- --------------------------------------------------------
 
@@ -104,6 +125,7 @@ CREATE TABLE `employees` (
   `department_id` int(11) DEFAULT NULL,
   `designation_id` int(11) DEFAULT NULL,
   `shift_id` int(11) DEFAULT NULL,
+  `default_working_from` varchar(50) DEFAULT 'office',
   `weekoff_days` varchar(100) DEFAULT NULL,
   `joining_date` date DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL,
@@ -163,6 +185,46 @@ CREATE TABLE `holidays` (
 
 INSERT INTO `holidays` (`id`, `holiday_name`, `holiday_date`, `created_at`, `updated_at`) VALUES
 (1, 'Makar Sankranti', '2026-01-14', '2025-12-10 18:38:35', NULL);
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `leave_types`
+-- Master for leave configurations used in the app.
+--
+
+CREATE TABLE `leave_types` (
+  `id` int(11) NOT NULL,
+  `code` varchar(50) NOT NULL,
+  `name` varchar(100) NOT NULL,
+  `yearly_quota` int(11) NOT NULL DEFAULT 0,
+  `monthly_limit` int(11) DEFAULT NULL,
+  `color_hex` varchar(20) DEFAULT '#111827',
+  `unused_action` varchar(20) NOT NULL DEFAULT 'lapse',
+  `applicability` varchar(255) DEFAULT NULL,
+  `is_active` tinyint(1) NOT NULL DEFAULT 1,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- Example seeds
+INSERT INTO `leave_types` (`id`, `code`, `name`, `yearly_quota`, `monthly_limit`, `color_hex`, `unused_action`, `applicability`, `is_active`) VALUES
+(1, 'CL', 'Casual Leave', 12, 2, '#2563eb', 'lapse', 'All employees', 1),
+(2, 'SL', 'Sick Leave', 7, NULL, '#dc2626', 'carry_forward', 'All employees', 1);
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `leave_type_employees`
+-- Mapping which leave types apply to which employees when scope is selected-employees.
+--
+
+CREATE TABLE `leave_type_employees` (
+  `id` int(11) NOT NULL,
+  `leave_type_id` int(11) NOT NULL,
+  `employee_id` int(11) NOT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
 
@@ -237,6 +299,20 @@ ALTER TABLE `holidays`
   ADD UNIQUE KEY `holiday_date` (`holiday_date`);
 
 --
+-- Indexes for table `leave_types`
+--
+ALTER TABLE `leave_types`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `code` (`code`);
+
+--
+-- Indexes for table `leave_type_employees`
+--
+ALTER TABLE `leave_type_employees`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `uniq_leave_emp` (`leave_type_id`,`employee_id`);
+
+--
 -- Indexes for table `shifts`
 --
 ALTER TABLE `shifts`
@@ -275,6 +351,18 @@ ALTER TABLE `employees`
 --
 ALTER TABLE `holidays`
   MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+
+--
+-- AUTO_INCREMENT for table `leave_types`
+--
+ALTER TABLE `leave_types`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
+
+--
+-- AUTO_INCREMENT for table `leave_type_employees`
+--
+ALTER TABLE `leave_type_employees`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT for table `shifts`

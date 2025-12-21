@@ -21,6 +21,33 @@ if ($empRes && $empRes->num_rows > 0) {
     ];
   }
 }
+
+// Working From options from master table (fallback to defaults if table empty or missing)
+$workingFromOptions = [];
+$wfRes = $con->query("SHOW TABLES LIKE 'working_from_master'");
+if ($wfRes && $wfRes->num_rows > 0) {
+  $wfRes = $con->query("SELECT code, label FROM working_from_master WHERE is_active = 1 ORDER BY label ASC");
+  if ($wfRes && $wfRes->num_rows > 0) {
+    while ($wf = $wfRes->fetch_assoc()) {
+      $code  = trim((string)($wf['code'] ?? ''));
+      $label = trim((string)($wf['label'] ?? ''));
+      if ($code !== '') {
+        $workingFromOptions[] = [
+          'code'  => $code,
+          'label' => $label !== '' ? $label : ucfirst($code),
+        ];
+      }
+    }
+  }
+}
+// Fallback to defaults if no master data yet
+if (empty($workingFromOptions)) {
+  $workingFromOptions = [
+    ['code' => 'office', 'label' => 'Office'],
+    ['code' => 'home',   'label' => 'Home'],
+    ['code' => 'client', 'label' => 'Client Site'],
+  ];
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -42,7 +69,7 @@ if ($empRes && $empRes->num_rows > 0) {
     /* top tabs nav */
     .top-nav-wrapper {
       background: #ffffff;
-      border-radius: 999px;
+      border-radius: 8px;
       padding: 6px 10px;
       box-shadow: 0 4px 14px rgba(15, 23, 42, 0.08);
       display: inline-flex;
@@ -51,7 +78,7 @@ if ($empRes && $empRes->num_rows > 0) {
     }
     .top-nav-pill {
       padding: 8px 20px;
-      border-radius: 999px;
+      border-radius: 6px;
       border: none;
       background: transparent;
       display: inline-flex;
@@ -73,7 +100,7 @@ if ($empRes && $empRes->num_rows > 0) {
       justify-content: center;
       width: 22px;
       height: 22px;
-      border-radius: 999px;
+      border-radius: 4px;
       background: rgba(255,255,255,0.12);
       font-size: 0.9rem;
     }
@@ -87,7 +114,7 @@ if ($empRes && $empRes->num_rows > 0) {
     .btn-round-icon {
       width: 40px;
       height: 40px;
-      border-radius: 999px;
+      border-radius: 6px;
       display: inline-flex;
       align-items: center;
       justify-content: center;
@@ -316,9 +343,6 @@ if ($empRes && $empRes->num_rows > 0) {
                         }
                         ?>
                       </select>
-                      <button class="btn btn-outline-dark" type="button" title="Add Department">
-                        +
-                      </button>
                     </div>
                   </div>
 
@@ -332,9 +356,6 @@ if ($empRes && $empRes->num_rows > 0) {
                         <option value="">Select Employee</option>
                         <!-- JS se dept wise fill hoga -->
                       </select>
-                      <button class="btn btn-outline-dark" type="button" title="Add Employee">
-                        +
-                      </button>
                     </div>
                   </div>
 
@@ -380,15 +401,11 @@ if ($empRes && $empRes->num_rows > 0) {
                         <input class="form-check-input" type="radio" name="mark_by" id="markByMultiple" value="multiple">
                         <label class="form-check-label" for="markByMultiple">Multiple</label>
                       </div>
-                      <div class="form-check">
-                        <input class="form-check-input" type="radio" name="mark_by" id="markByMonth" value="month">
-                        <label class="form-check-label" for="markByMonth">Month</label>
-                      </div>
                     </div>
                   </div>
 
-                  <!-- Select Date -->
-                  <div class="col-md-6 col-lg-3">
+                  <!-- Select Date (single) -->
+                  <div class="col-md-6 col-lg-3" id="singleDateWrapper">
                     <label class="form-label fw-semibold">
                       Select Date <span class="text-danger">*</span>
                     </label>
@@ -400,6 +417,20 @@ if ($empRes && $empRes->num_rows > 0) {
                     </div>
                   </div>
 
+                  <!-- Select Multiple Dates -->
+                  <div class="col-12 d-none" id="multiDatesWrapper">
+                    <label class="form-label fw-semibold">
+                      Select Dates <span class="text-danger">*</span>
+                    </label>
+                    <div id="multiDatesList" class="d-flex flex-column gap-2">
+                      <!-- rows with name="dates[]" will be added via JS -->
+                    </div>
+                    <button type="button" class="btn btn-sm btn-outline-primary mt-2" id="addDateRow">
+                      + Add Date
+                    </button>
+                    <small class="text-muted d-block mt-1">Same Clock In/Out will be applied to all selected dates.</small>
+                  </div>
+
                   <!-- Clock In -->
                   <div class="col-md-6 col-lg-3">
                     <label class="form-label fw-semibold">
@@ -409,7 +440,7 @@ if ($empRes && $empRes->num_rows > 0) {
                       <span class="input-group-text">
                         ⏰
                       </span>
-                      <input type="time" class="form-control" name="clock_in" id="clockIn" required>
+                      <input type="text" class="form-control time-input" name="clock_in" id="clockIn" placeholder="09:00 AM" readonly required>
                     </div>
                   </div>
 
@@ -422,7 +453,7 @@ if ($empRes && $empRes->num_rows > 0) {
                       <span class="input-group-text">
                         ⏱
                       </span>
-                      <input type="time" class="form-control" name="clock_out" id="clockOut" required>
+                      <input type="text" class="form-control time-input" name="clock_out" id="clockOut" placeholder="06:30 PM" readonly required>
                     </div>
                   </div>
 
@@ -434,28 +465,26 @@ if ($empRes && $empRes->num_rows > 0) {
                     <div class="input-group">
                       <select class="form-select" name="working_from" id="workingFrom" required>
                         <option value="">Select Working From...</option>
-                        <option value="office">Office</option>
-                        <option value="home">Home</option>
-                        <option value="client">Client Site</option>
+                        <?php foreach ($workingFromOptions as $wf) { ?>
+                          <option value="<?php echo htmlspecialchars($wf['code']); ?>">
+                            <?php echo htmlspecialchars($wf['label']); ?>
+                          </option>
+                        <?php } ?>
                       </select>
-                      <button class="btn btn-outline-dark" type="button" title="Add Working From">
-                        +
-                      </button>
                     </div>
                   </div>
 
-                  <!-- Reason -->
-                <div class="col-md-6 col-lg-3">
-                  <label class="form-label fw-semibold">
-                    Reason / Break Type
-                  </label>
-                  <select class="form-select" name="reason" id="attendanceReason">
-                    <option value="normal">Normal Day</option>
-                    <option value="lunch">Lunch Break</option>
-                    <option value="tea">Tea / Short Break</option>
-                    
-                  </select>
-                </div>
+                  <!-- Reason / Break Type -->
+            <div class="col-md-6 col-lg-3">
+              <label class="form-label fw-semibold">
+                Reason / Break Type
+              </label>
+              <select class="form-select" name="reason" id="attendanceReason" required>
+                <option value="">Select</option>
+                <option value="lunch">Lunch Break</option>
+                <option value="shift_end">Shift End</option>
+              </select>
+            </div>
 
                   <!-- Attendance Overwrite -->
                   <div class="col-12">
@@ -479,7 +508,7 @@ if ($empRes && $empRes->num_rows > 0) {
                 Cancel
               </button>
               <button type="button" class="btn btn-dark" id="saveAttendanceBtn">
-                Save
+                Apply
               </button>
             </div>
 
@@ -654,7 +683,7 @@ if ($empRes && $empRes->num_rows > 0) {
               </div>
             </div>
             <div class="d-flex justify-content-between mt-2">
-              <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+              <button type="button" class="btn btn-outline-secondary" id="shiftTpCancel" data-bs-dismiss="modal">Cancel</button>
               <button type="button" class="btn btn-dark" id="shiftTpApply">Apply</button>
             </div>
           </div>
@@ -697,6 +726,14 @@ function hideLoader() {
 
 // Employees list ke buttons/toggles ko init karne ka function
 function initEmployeesListEvents() {
+    // Dynamically inject and execute the search/filter script if present in loaded HTML (for AJAX)
+    var scriptInHtml = document.querySelector('#employeeSearchScriptSource');
+    if (scriptInHtml) {
+      var newScript = document.createElement('script');
+      newScript.id = 'employeeSearchScript';
+      newScript.textContent = scriptInHtml.textContent;
+      document.body.appendChild(newScript);
+    }
   const toggles       = document.querySelectorAll('.status-toggle');
   const deleteButtons = document.querySelectorAll('.delete-employee');
   const deleteModalEl = document.getElementById('deleteConfirmModal');
@@ -759,6 +796,84 @@ function initEmployeesListEvents() {
       window.location.href = 'delete_employee.php?id=' + encodeURIComponent(deleteId);
     });
   }
+
+  // SEARCH: filter employees in the table as user types (migrated from employees_list.php)
+  var scriptStatus = document.getElementById('scriptStatus');
+  if (scriptStatus) {
+    scriptStatus.style.display = 'block';
+    scriptStatus.textContent = 'Employee search script is running.';
+    scriptStatus.classList.remove('alert-danger');
+    scriptStatus.classList.add('alert-info');
+  }
+  var testDiv = document.getElementById('testDiv');
+  if (testDiv) {
+    testDiv.textContent = 'TEST DIV: JS IS RUNNING!';
+    testDiv.style.background = 'lime';
+    testDiv.style.color = 'black';
+  }
+  function filterEmployeeTable() {
+    var input = document.getElementById('employeeSearch');
+    if (scriptStatus && input) {
+      scriptStatus.textContent = 'Employee search script is running. Current filter: "' + input.value + '"';
+    }
+    var filter = input ? input.value.toLowerCase().trim() : '';
+    var tbody = document.getElementById('employeeTableBody');
+    var rows = tbody ? tbody.getElementsByTagName('tr') : [];
+    var anyVisible = false;
+    var noDataRow = null;
+    var matchedNames = [];
+    for (var i = 0; i < rows.length; i++) {
+      var row = rows[i];
+      // Identify the 'no employees found' row by its unique text
+      if (row.innerText && row.innerText.trim().toLowerCase().includes('no employees found')) {
+        noDataRow = row;
+        continue;
+      }
+      // Only filter rows with actual employee data
+      // Get relevant columns: Emp Code, Name, Department, Shift
+      var tds = row.getElementsByTagName('td');
+      var searchText = '';
+      var nameText = '';
+      if (tds.length > 4) {
+        searchText = [tds[1], tds[2], tds[3], tds[4]]
+          .map(function(td) { return (td.innerText || td.textContent || '').toLowerCase().trim(); })
+          .join(' ');
+        // Name column (tds[2])
+        nameText = (tds[2].innerText || tds[2].textContent || '').trim();
+      }
+      // Use includes for partial match
+      if (filter === '' || searchText.includes(filter)) {
+        row.style.display = '';
+        anyVisible = true;
+        if (filter !== '' && nameText) {
+          matchedNames.push(nameText);
+        }
+      } else {
+        row.style.display = 'none';
+      }
+    }
+    if (noDataRow) {
+      noDataRow.style.display = anyVisible ? 'none' : '';
+    }
+    // Show matched names under the table
+    var resultsDiv = document.getElementById('searchResults');
+    if (resultsDiv) {
+      if (filter !== '' && matchedNames.length > 0) {
+        resultsDiv.innerHTML = '<strong>Matching Employees:</strong><ul class="list-group list-group-flush">' +
+          matchedNames.map(function(name) { return '<li class="list-group-item py-1">' + name + '</li>'; }).join('') + '</ul>';
+      } else if (filter !== '') {
+        resultsDiv.innerHTML = '<span class="text-danger">No matching employees found.</span>';
+      } else {
+        resultsDiv.innerHTML = '';
+      }
+    }
+  }
+  var searchInput = document.getElementById('employeeSearch');
+  if (searchInput) {
+    searchInput.addEventListener('input', filterEmployeeTable);
+    // Run once on load to ensure correct state
+    filterEmployeeTable();
+  }
 }
 
 // generic AJAX loader with animation
@@ -793,6 +908,7 @@ function loadPage(page, button) {
       // agar employees list load hui hai to uske events init karo
       if (page === 'employees_list.php') {
         initEmployeesListEvents();
+        initShiftTimePicker(); // also enable time picker for Mark Attendance modal
       } else if (page.startsWith('shifts.php')) {
         initShiftTimePicker();
       }
@@ -819,6 +935,7 @@ function initShiftTimePicker() {
   const amBtn = document.getElementById('shiftTpAm');
   const pmBtn = document.getElementById('shiftTpPm');
   const applyBtn = document.getElementById('shiftTpApply');
+  const cancelBtn = document.getElementById('shiftTpCancel');
 
   if (!displayEl || !hourEl || !minuteEl || !amBtn || !pmBtn || !applyBtn) return;
 
@@ -900,8 +1017,10 @@ function initShiftTimePicker() {
     modal.show();
   }
 
-  // Bind to current contentArea inputs/buttons
-  document.querySelectorAll('#contentArea .time-picker-btn').forEach(btn => {
+  // Bind to time picker buttons/inputs (both in loaded content and Mark Attendance modal)
+  document.querySelectorAll('#contentArea .time-picker-btn, #markAttendanceModal .time-picker-btn').forEach(btn => {
+    if (btn.dataset.tpBound === '1') return;
+    btn.dataset.tpBound = '1';
     btn.addEventListener('click', function() {
       const targetId = this.getAttribute('data-target-input');
       const input = document.getElementById(targetId);
@@ -909,7 +1028,9 @@ function initShiftTimePicker() {
     });
   });
 
-  document.querySelectorAll('#contentArea .time-input').forEach(input => {
+  document.querySelectorAll('#contentArea .time-input, #markAttendanceModal .time-input').forEach(input => {
+    if (input.dataset.tpBound === '1') return;
+    input.dataset.tpBound = '1';
     input.addEventListener('click', function() {
       openPickerForInput(this);
     });
@@ -927,6 +1048,13 @@ function initShiftTimePicker() {
     amBtn.classList.remove('active');
     updateDisplay();
   });
+
+  if (cancelBtn) {
+    cancelBtn.addEventListener('click', function() {
+      currentTargetInput = null;
+      modal.hide();
+    });
+  }
 
   applyBtn.addEventListener('click', function() {
     if (!currentTargetInput) return;
@@ -1023,6 +1151,80 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   }
 
+  // Mark Attendance By: Date / Multiple / Month
+  const markByRadios = document.querySelectorAll('input[name="mark_by"]');
+  const singleDateWrapper = document.getElementById('singleDateWrapper');
+  const multiDatesWrapper = document.getElementById('multiDatesWrapper');
+  const attendanceDateInput = document.getElementById('attendanceDate');
+  const multiDatesList = document.getElementById('multiDatesList');
+  const addDateRowBtn = document.getElementById('addDateRow');
+
+  function createDateRow() {
+    const row = document.createElement('div');
+    row.className = 'd-flex align-items-center gap-2 date-row';
+    row.innerHTML = `
+      <input type="date" class="form-control" name="dates[]">
+      <button type="button" class="btn btn-outline-danger btn-sm remove-date-row">&times;</button>
+    `;
+    return row;
+  }
+
+  function updateMarkByUI(mode) {
+    if (!singleDateWrapper || !multiDatesWrapper || !attendanceDateInput) return;
+
+    if (mode === 'multiple') {
+      singleDateWrapper.classList.add('d-none');
+      multiDatesWrapper.classList.remove('d-none');
+      attendanceDateInput.required = false;
+
+      // Ensure at least one row exists and mark them required
+      if (multiDatesList && multiDatesList.children.length === 0) {
+        multiDatesList.appendChild(createDateRow());
+      }
+      if (multiDatesList) {
+        multiDatesList.querySelectorAll('input[type="date"]').forEach(inp => {
+          inp.required = true;
+        });
+      }
+    } else {
+      // 'date' or 'month' -> use single date field
+      singleDateWrapper.classList.remove('d-none');
+      multiDatesWrapper.classList.add('d-none');
+      attendanceDateInput.required = true;
+      if (multiDatesList) {
+        multiDatesList.querySelectorAll('input[type="date"]').forEach(inp => {
+          inp.required = false;
+        });
+      }
+    }
+  }
+
+  if (markByRadios && markByRadios.length) {
+    markByRadios.forEach(r => {
+      r.addEventListener('change', function () {
+        updateMarkByUI(this.value);
+      });
+    });
+    // Initialize based on default checked radio
+    const checked = Array.from(markByRadios).find(r => r.checked);
+    if (checked) updateMarkByUI(checked.value);
+  }
+
+  if (addDateRowBtn && multiDatesList) {
+    addDateRowBtn.addEventListener('click', function () {
+      multiDatesList.appendChild(createDateRow());
+    });
+
+    multiDatesList.addEventListener('click', function (e) {
+      if (e.target.classList.contains('remove-date-row')) {
+        const row = e.target.closest('.date-row');
+        if (row && multiDatesList.children.length > 1) {
+          row.remove();
+        }
+      }
+    });
+  }
+
     // Save attendance button -> REAL AJAX SAVE
   const saveBtn = document.getElementById('saveAttendanceBtn');
   const markForm = document.getElementById('markAttendanceForm');
@@ -1116,6 +1318,17 @@ document.addEventListener("click", function (e) {
     const id = editLink.dataset.editId;
     const tabBtn = document.querySelector('[data-page="designations.php?ajax=1"]');
     loadPage("designations.php?ajax=1&edit=" + encodeURIComponent(id), tabBtn);
+  }
+});
+
+// Holiday Edit (AJAX load)
+document.addEventListener("click", function (e) {
+  const editLink = e.target.closest(".holiday-edit");
+  if (editLink) {
+    e.preventDefault();
+    const id = editLink.dataset.editId;
+    const tabBtn = document.querySelector('[data-page="holidays.php?ajax=1"]');
+    loadPage("holidays.php?ajax=1&edit=" + encodeURIComponent(id), tabBtn);
   }
 });
 
@@ -1539,46 +1752,104 @@ document.addEventListener("submit", function (e) {
     
     // Event delegation for dynamically loaded content
     document.addEventListener('click', function(e) {
-        const cell = e.target.closest('.att-clickable');
-        if (!cell) return;
-        
-        initModal();
-        if (!attendanceModal) {
-            console.error('Modal not initialized');
-            return;
+      const cell = e.target.closest('.att-clickable');
+      if (!cell) return;
+
+      const status = (cell.getAttribute('data-status') || '').toUpperCase();
+      const empId = cell.getAttribute('data-emp-id');
+      const empName = cell.getAttribute('data-emp-name');
+      const empRole = cell.getAttribute('data-emp-role');
+      const date = cell.getAttribute('data-date');
+
+      if (!empId || !date) return;
+
+      // If status is Absent (A) -> open Mark Attendance modal prefilled
+      if (status === 'A') {
+        const deptSelect = document.getElementById('departmentSelect');
+        const empSelect  = document.getElementById('employeeSelect');
+        const dateInput  = document.getElementById('attendanceDate');
+
+        if (deptSelect && empSelect && dateInput) {
+          // Find employee in ALL_EMPLOYEES to get department
+          const empObj = ALL_EMPLOYEES.find(e => String(e.id) === String(empId));
+
+          // Reset form basic fields
+          document.getElementById('markAttendanceForm')?.reset();
+
+          if (empObj && empObj.department_id) {
+            deptSelect.value = String(empObj.department_id);
+
+            // Trigger change to populate employee list for that department
+            const changeEvent = new Event('change');
+            deptSelect.dispatchEvent(changeEvent);
+
+            // After population, select this employee
+            Array.from(empSelect.options).forEach(opt => {
+              if (String(opt.value) === String(empId)) {
+                opt.selected = true;
+              }
+            });
+          }
+
+          // Single date mode
+          const markByDateRadio = document.getElementById('markByDate');
+          if (markByDateRadio) {
+            markByDateRadio.checked = true;
+          }
+          if (typeof updateMarkByUI === 'function') {
+            updateMarkByUI('date');
+          }
+
+          // Set selected date
+          dateInput.value = date;
+
+          // Default Reason to Shift End (common for full-day manual)
+          const reasonSelect = document.getElementById('attendanceReason');
+          if (reasonSelect) {
+            reasonSelect.value = 'shift_end';
+          }
+
+          // Open Mark Attendance modal
+          const markModalEl = document.getElementById('markAttendanceModal');
+          if (markModalEl && typeof bootstrap !== 'undefined') {
+            const markModal = bootstrap.Modal.getOrCreateInstance(markModalEl);
+            markModal.show();
+          }
         }
-        
-        const empId = cell.getAttribute('data-emp-id');
-        const empName = cell.getAttribute('data-emp-name');
-        const empRole = cell.getAttribute('data-emp-role');
-        const date = cell.getAttribute('data-date');
-        
-        if (!empId || !date) return;
-        
-        // Set employee info
-        const modalEmpName = document.getElementById('modalEmpName');
-        const modalEmpRole = document.getElementById('modalEmpRole');
-        const modalEmpAvatar = document.getElementById('modalEmpAvatar');
-        const modalDate = document.getElementById('modalDate');
-        
-        if (modalEmpName) modalEmpName.textContent = empName;
-        if (modalEmpRole) modalEmpRole.textContent = empRole;
-        if (modalEmpAvatar) modalEmpAvatar.textContent = empName.charAt(0).toUpperCase();
-        if (modalDate) modalDate.textContent = formatDate(date);
-        
-        // Show loading
-        const clockInBox = document.getElementById('clockInBox');
-        const clockOutBox = document.getElementById('clockOutBox');
-        const totalWorkBox = document.getElementById('totalWorkBox');
-        const activityTimeline = document.getElementById('activityTimeline');
-        
-        if (clockInBox) clockInBox.style.display = 'none';
-        if (clockOutBox) clockOutBox.style.display = 'none';
-        if (totalWorkBox) totalWorkBox.style.display = 'none';
-        if (activityTimeline) activityTimeline.innerHTML = '<div class="text-center py-3"><div class="spinner-border spinner-border-sm" role="status"></div></div>';
-        
-        // Fetch attendance details
-        fetch('get_attendance_details.php?emp_id=' + empId + '&date=' + date)
+
+        return; // Skip details modal for absent days
+      }
+
+      initModal();
+      if (!attendanceModal) {
+        console.error('Modal not initialized');
+        return;
+      }
+
+      // Set employee info for details modal
+      const modalEmpName = document.getElementById('modalEmpName');
+      const modalEmpRole = document.getElementById('modalEmpRole');
+      const modalEmpAvatar = document.getElementById('modalEmpAvatar');
+      const modalDate = document.getElementById('modalDate');
+
+      if (modalEmpName) modalEmpName.textContent = empName;
+      if (modalEmpRole) modalEmpRole.textContent = empRole;
+      if (modalEmpAvatar) modalEmpAvatar.textContent = empName.charAt(0).toUpperCase();
+      if (modalDate) modalDate.textContent = formatDate(date);
+
+      // Show loading
+      const clockInBox = document.getElementById('clockInBox');
+      const clockOutBox = document.getElementById('clockOutBox');
+      const totalWorkBox = document.getElementById('totalWorkBox');
+      const activityTimeline = document.getElementById('activityTimeline');
+
+      if (clockInBox) clockInBox.style.display = 'none';
+      if (clockOutBox) clockOutBox.style.display = 'none';
+      if (totalWorkBox) totalWorkBox.style.display = 'none';
+      if (activityTimeline) activityTimeline.innerHTML = '<div class="text-center py-3"><div class="spinner-border spinner-border-sm" role="status"></div></div>';
+
+      // Fetch attendance details
+      fetch('get_attendance_details.php?emp_id=' + empId + '&date=' + date)
             .then(response => response.json())
             .then(data => {
                 if (data.success) {

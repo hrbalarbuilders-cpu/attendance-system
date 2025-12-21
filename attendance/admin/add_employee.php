@@ -12,7 +12,7 @@ function generateEmpCode(mysqli $con): string {
     return 'EMP' . str_pad($nextId, 3, '0', STR_PAD_LEFT); // EMP001, EMP002...
 }
 
-// ---------- Fetch Dropdown Data (Departments, Designations, Shifts) ----------
+// ---------- Fetch Dropdown Data (Departments, Designations, Shifts, Working From) ----------
 $deptRes = $con->query("SELECT id, department_name FROM departments ORDER BY department_name ASC");
 $desigRes = $con->query("
     SELECT d.id, d.designation_name, dept.department_name 
@@ -23,6 +23,32 @@ $desigRes = $con->query("
 
 // Shifts dropdown ke liye
 $shiftRes = $con->query("SELECT * FROM shifts ORDER BY shift_name ASC");
+
+// Working From options from master table
+$workingFromOptions = [];
+$wfCheck = $con->query("SHOW TABLES LIKE 'working_from_master'");
+if ($wfCheck && $wfCheck->num_rows > 0) {
+  $wfRes = $con->query("SELECT code, label FROM working_from_master WHERE is_active = 1 ORDER BY label ASC");
+  if ($wfRes && $wfRes->num_rows > 0) {
+    while ($wf = $wfRes->fetch_assoc()) {
+      $code  = trim((string)($wf['code'] ?? ''));
+      $label = trim((string)($wf['label'] ?? ''));
+      if ($code !== '') {
+        $workingFromOptions[] = [
+          'code'  => $code,
+          'label' => $label !== '' ? $label : ucfirst($code),
+        ];
+      }
+    }
+  }
+}
+if (empty($workingFromOptions)) {
+  $workingFromOptions = [
+    ['code' => 'office', 'label' => 'Office'],
+    ['code' => 'home',   'label' => 'Home'],
+    ['code' => 'client', 'label' => 'Client Site'],
+  ];
+}
 
 // Next emp code for display in form (readonly)
 $displayEmpCode = generateEmpCode($con);
@@ -39,6 +65,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $department_id  = (int)($_POST['department_id'] ?? 0);
     $designation_id = (int)($_POST['designation_id'] ?? 0);
     $shift_id       = (int)($_POST['shift_id'] ?? 0);
+    $default_working_from = trim($_POST['default_working_from'] ?? '');
     $joining_date   = $_POST['joining_date'] ?? null;
 
     // Basic validation
@@ -54,6 +81,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($shift_id <= 0) {
         $errors[] = "Please select a shift.";
     }
+    if ($default_working_from === '') {
+      $errors[] = "Please select Working From.";
+    }
     if (!$joining_date) {
         $errors[] = "Joining date is required.";
     }
@@ -66,13 +96,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         // NOTE: shift_name + device_id hata diya, ab sirf shift_id store kar rahe hain
         $sql = "INSERT INTO employees 
-            (emp_code, name, mobile, email, dob, department_id, designation_id, shift_id, joining_date, status)
-            VALUES (?,?,?,?,?,?,?,?,?,1)";
+          (emp_code, name, mobile, email, dob, department_id, designation_id, shift_id, default_working_from, joining_date, status)
+          VALUES (?,?,?,?,?,?,?,?,?,?,1)";
 
         $stmt = $con->prepare($sql);
         if ($stmt) {
             $stmt->bind_param(
-                "ssssiiiss",
+                "ssssiiisss",
                 $emp_code,
                 $name,
                 $mobile,
@@ -81,6 +111,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $department_id,
                 $designation_id,
                 $shift_id,
+                $default_working_from,
                 $joining_date
             );
 
@@ -220,10 +251,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </select>
           </div>
 
+          <!-- Working From -->
+          <div class="col-md-6">
+            <label class="form-label">Working From</label>
+            <select name="default_working_from" class="form-select" required>
+              <option value="">Select Working From</option>
+              <?php
+              $curWf = $_POST['default_working_from'] ?? '';
+              foreach ($workingFromOptions as $wf) {
+                  $selected = ($curWf === $wf['code']) ? 'selected' : '';
+              ?>
+                <option value="<?php echo htmlspecialchars($wf['code']); ?>" <?php echo $selected; ?>>
+                  <?php echo htmlspecialchars($wf['label']); ?>
+                </option>
+              <?php } ?>
+            </select>
+          </div>
+
         </div>
 
         <div class="mt-4">
-          <button type="submit" class="btn btn-primary">Save Employee</button>
+          <button type="submit" class="btn btn-dark">Save Employee</button>
           <a href="employees.php" class="btn btn-secondary ms-2">Cancel</a>
         </div>
       </form>

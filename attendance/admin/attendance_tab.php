@@ -351,7 +351,7 @@ body { background:#f5f6f8; font-family: Arial, sans-serif; }
     gap:6px;
     font-size:13px;
     background:#f3f4f6;
-    border-radius:999px;
+    border-radius:6px;
     padding:4px 12px;
 }
 .att-pill-icon{
@@ -393,7 +393,7 @@ body { background:#f5f6f8; font-family: Arial, sans-serif; }
 
 /* Add Attendance button */
 .att-add-btn{
-    border-radius: 999px;
+    border-radius: 8px;
     font-weight: 600;
     padding: 6px 20px;
     font-size: 14px;
@@ -562,11 +562,11 @@ body { background:#f5f6f8; font-family: Arial, sans-serif; }
                 <button class="btn btn-dark" type="submit">Apply</button>
             </form>
 
-            <!-- ADD ATTENDANCE BUTTON (yehi se modal open hoga) -->
+            <!-- ADD ATTENDANCE BUTTON (open Mark Attendance modal) -->
             <button type="button"
-                    class="btn btn-primary att-add-btn"
-                    data-bs-toggle="modal"
-                    data-bs-target="#markAttendanceModal">
+		            class="btn btn-dark att-add-btn"
+		            data-bs-toggle="modal"
+		            data-bs-target="#markAttendanceModal">
                 + Add Attendance
             </button>
         </div>
@@ -699,6 +699,7 @@ body { background:#f5f6f8; font-family: Arial, sans-serif; }
                                  data-emp-name="<?php echo htmlspecialchars($emp['name']); ?>"
                                  data-emp-role="<?php echo htmlspecialchars($emp['designation_name'] ?? ''); ?>"
                                  data-date="<?php echo $currentDate; ?>"
+                                 data-status="<?php echo $status; ?>"
                                  style="cursor: pointer;">
                                 <div class="att-badge att-<?php echo $status === '-' ? 'future' : $status; ?>">
                                     <?php echo $display; ?>

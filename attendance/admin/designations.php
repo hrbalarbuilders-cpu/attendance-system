@@ -115,7 +115,7 @@ function renderDesignationsContent($deptRes, $editRow, $list, $isAjax) {
                  value="<?php echo htmlspecialchars($editRow['designation_name'] ?? ''); ?>">
         </div>
 
-        <button type="submit" class="btn btn-primary">
+        <button type="submit" class="btn btn-dark">
           <?php echo $editRow ? 'Update' : 'Save'; ?>
         </button>
         <?php if ($editRow) { ?>

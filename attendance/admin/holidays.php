@@ -124,7 +124,7 @@ function renderHolidaysContent($editRow, $list, $isAjax) {
                  value="<?php echo $editRow['holiday_date'] ?? ''; ?>">
         </div>
 
-        <button type="submit" class="btn btn-primary">
+        <button type="submit" class="btn btn-dark">
           <?php echo $editRow ? 'Update' : 'Save'; ?>
         </button>
         <?php if ($editRow) { ?>

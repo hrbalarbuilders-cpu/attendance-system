@@ -14,7 +14,7 @@ $list = $con->query("SELECT * FROM departments ORDER BY department_name ASC");
   <h1 class="section-title mb-0">Department Master</h1>
 
   <!-- Full page manage button -->
-  <a href="departments.php" class="btn btn-pill btn-add">
+  <a href="departments.php" class="btn btn-dark">
     Manage Departments
   </a>
 </div>

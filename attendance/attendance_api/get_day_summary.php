@@ -28,6 +28,12 @@ try {
     // Get employee shift info
     $empCodePattern = "EMP" . str_pad((string)$user_id, 3, '0', STR_PAD_LEFT);
     $shiftStmt = $con->prepare("
+        SELECT e.id, s.start_time, s.end_time, s.late_mark_after, s.lunch_start, s.lunch_end
+        FROM employees e
+        LEFT JOIN shifts s ON e.shift_id = s.id
+        WHERE (e.emp_code = ? OR e.id = ?) AND e.status = 1
+        LIMIT 1
+    ");
         SELECT e.id, s.start_time, s.end_time, s.late_mark_after
         FROM employees e
         LEFT JOIN shifts s ON e.shift_id = s.id
@@ -42,12 +48,16 @@ try {
     $shiftStartTime = null;
     $shiftEndTime = null;
     $lateMarkAfter = 30; // Default 30 minutes
+    $lunchStartTime = null;
+    $lunchEndTime = null;
     
     if ($shiftResult && $shiftResult->num_rows > 0) {
         $shiftRow = $shiftResult->fetch_assoc();
         $shiftStartTime = $shiftRow['start_time'];
         $shiftEndTime = $shiftRow['end_time'];
         $lateMarkAfter = (int)($shiftRow['late_mark_after'] ?? 30);
+        $lunchStartTime = $shiftRow['lunch_start'] ?? null;
+        $lunchEndTime = $shiftRow['lunch_end'] ?? null;
     }
     $shiftStmt->close();
     
@@ -130,13 +140,38 @@ try {
     }
     
     // Calculate break time (OUT to IN pairs)
+    $hasExplicitLunch = false;
     for ($i = 0; $i < count($logs) - 1; $i++) {
+        if ($logs[$i]['reason'] === 'lunch' || $logs[$i + 1]['reason'] === 'lunch') {
+            $hasExplicitLunch = true;
+        }
+
         if ($logs[$i]['type'] === 'out' && $logs[$i + 1]['type'] === 'in') {
             $outTime = new DateTime($logs[$i]['time']);
             $inTime = new DateTime($logs[$i + 1]['time']);
             $breakDuration = (int)$inTime->diff($outTime)->format('%i') + 
                            (int)$inTime->diff($outTime)->format('%h') * 60;
             $breakMinutes += $breakDuration;
+        }
+    }
+
+    // Auto-deduct fixed lunch break based on shift timings when:
+    // - Shift has lunch_start and lunch_end configured
+    // - User worked across the full lunch window (first IN before lunch_start and last OUT after lunch_end)
+    // - No explicit lunch punches are present for the day (to avoid double counting)
+    if ($firstInTime && $lastOutTime && $lunchStartTime && $lunchEndTime && !$hasExplicitLunch) {
+        $lunchStart = new DateTime($date . ' ' . $lunchStartTime);
+        $lunchEnd = new DateTime($date . ' ' . $lunchEndTime);
+
+        // Handle overnight lunch window (rare, but for completeness)
+        if ($lunchEnd <= $lunchStart) {
+            $lunchEnd->modify('+1 day');
+        }
+
+        if ($firstInTime <= $lunchStart && $lastOutTime >= $lunchEnd) {
+            $lunchDiff = $lunchEnd->diff($lunchStart);
+            $lunchMinutes = (int)$lunchDiff->format('%i') + (int)$lunchDiff->format('%h') * 60;
+            $breakMinutes += $lunchMinutes;
         }
     }
     

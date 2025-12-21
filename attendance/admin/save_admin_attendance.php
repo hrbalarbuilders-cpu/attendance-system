@@ -27,7 +27,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 */
 
 $employee_id   = isset($_POST['employee_id']) ? (int)$_POST['employee_id'] : 0;
-$date          = trim($_POST['date'] ?? '');
+$date          = trim($_POST['date'] ?? ''); // single date
 $clock_in      = trim($_POST['clock_in'] ?? '');
 $clock_out     = trim($_POST['clock_out'] ?? '');
 $working_from  = trim($_POST['working_from'] ?? '');
@@ -36,11 +36,33 @@ $late          = isset($_POST['late']) ? (int)$_POST['late'] : 0;
 $half_day      = isset($_POST['half_day']) ? (int)$_POST['half_day'] : 0;
 $overwrite     = isset($_POST['overwrite']) ? 1 : 0;
 
+$mark_by       = $_POST['mark_by'] ?? 'date';
+
 $errors = [];
+
+// Build list of dates based on mark_by
+$datesToSave = [];
+if ($mark_by === 'multiple') {
+    $rawDates = isset($_POST['dates']) ? (array)$_POST['dates'] : [];
+    foreach ($rawDates as $d) {
+        $d = trim((string)$d);
+        if ($d !== '') {
+            $datesToSave[] = $d;
+        }
+    }
+    if (empty($datesToSave)) {
+        $errors[] = 'At least one date is required.';
+    }
+} else {
+    if ($date === '') {
+        $errors[] = 'Date is required.';
+    } else {
+        $datesToSave[] = $date;
+    }
+}
 
 // Basic validation
 if ($employee_id <= 0)  $errors[] = 'Employee is required.';
-if ($date === '')       $errors[] = 'Date is required.';
 if ($clock_in === '')   $errors[] = 'Clock In time is required.';
 if ($clock_out === '')  $errors[] = 'Clock Out time is required.';
 if ($working_from === '') $errors[] = 'Working From is required.';
@@ -48,6 +70,22 @@ if ($working_from === '') $errors[] = 'Working From is required.';
 if ($reason === '') {
     $reason = 'normal';
 }
+
+// Normalize clock_in / clock_out to 24-hour H:i format while allowing AM/PM input
+$normalizeTime = function ($t) {
+    $t = trim((string)$t);
+    if ($t === '') {
+        return '';
+    }
+    $ts = strtotime($t);
+    if ($ts === false) {
+        return $t; // leave as-is; any invalid format will be caught when building datetime
+    }
+    return date('H:i', $ts);
+};
+
+$clock_in  = $normalizeTime($clock_in);
+$clock_out = $normalizeTime($clock_out);
 
 if (!empty($errors)) {
     echo json_encode([
@@ -88,22 +126,16 @@ if ($empNumericId <= 0) {
     $empNumericId = (int)$emp['id'];
 }
 
-/* ---------------- Datetime banaye ---------------- */
-
-$clockInDateTime  = $date . ' ' . $clock_in  . ':00';
-$clockOutDateTime = $date . ' ' . $clock_out . ':00';
-
 /* ---------------- Overwrite (same user + same date) ---------------- */
 
 if ($overwrite) {
     $del = $con->prepare("
         DELETE FROM attendance_logs 
         WHERE user_id = ? 
-          AND DATE(time) = ?
+                    AND DATE(time) = ?
     ");
     if ($del) {
-        $del->bind_param("is", $empNumericId, $date);
-        $del->execute();
+                $del->bind_param("is", $empNumericId, $currentDate);
     }
 }
 
@@ -149,12 +181,32 @@ if (!$insOut) {
 }
 $insOut->bind_param("isss", $empNumericId, $clockOutDateTime, $working_from, $reason);
 
-/* ---------------- Execute ---------------- */
+/* ---------------- Execute for each date ---------------- */
 
-$ok1 = $insIn->execute();
-$ok2 = $insOut->execute();
+$overallOk = true;
+$clockInDateTime = '';
+$clockOutDateTime = '';
+$currentDate = '';
 
-if ($ok1 && $ok2) {
+foreach ($datesToSave as $d) {
+    $currentDate = $d;
+    $clockInDateTime  = $currentDate . ' ' . $clock_in  . ':00';
+    $clockOutDateTime = $currentDate . ' ' . $clock_out . ':00';
+
+    if ($overwrite && isset($del) && $del) {
+        if (!$del->execute()) {
+            $overallOk = false;
+            break;
+        }
+    }
+
+    if (!$insIn->execute() || !$insOut->execute()) {
+        $overallOk = false;
+        break;
+    }
+}
+
+if ($overallOk) {
     echo json_encode([
         'success' => true,
         'message' => 'Attendance saved successfully.'

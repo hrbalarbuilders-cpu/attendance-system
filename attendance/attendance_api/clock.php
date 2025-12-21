@@ -17,7 +17,7 @@ $time         = isset($_POST['time'])         ? trim($_POST['time'])         : n
 $device_id    = isset($_POST['device_id'])    ? trim($_POST['device_id'])    : null;
 $lat          = isset($_POST['lat'])          ? trim($_POST['lat'])          : null;
 $lng          = isset($_POST['lng'])          ? trim($_POST['lng'])          : null;
-$working_from = isset($_POST['working_from']) ? trim($_POST['working_from']) : 'office';
+$working_from = isset($_POST['working_from']) ? trim($_POST['working_from']) : '';
 $reason       = isset($_POST['reason'])       ? trim($_POST['reason'])       : 'shift_start';
 
 // Basic validation
@@ -48,17 +48,18 @@ if (!in_array($reason, $allowedReasons, true)) {
 // 1) Per-employee: if this employee already has a different device_id, block.
 // 2) Global: if this device_id is already registered to some OTHER employee, block.
 
-$empCodePattern = "EMP" . str_pad((string)intval($user_id), 3, '0', STR_PAD_LEFT);
-$uidInt = (int)$user_id;
+ $empCodePattern = "EMP" . str_pad((string)intval($user_id), 3, '0', STR_PAD_LEFT);
+ $uidInt = (int)$user_id;
 
 // Track the actual employee row id that this user_id maps to.
 // This avoids treating the same employee as "another employee" in the global check
 // when user_id is derived from emp_code (e.g., EMP006) but employees.id is different.
 $currentEmployeeId = $uidInt;
+$defaultWorkingFrom = '';
 
-// Step 1: check current employee's registered device (if any)
+// Step 1: check current employee's registered device (if any) and ensure Working From is assigned
 $checkStmt = $con->prepare(
-    "SELECT id, emp_code, device_id
+    "SELECT id, emp_code, device_id, default_working_from
      FROM employees
      WHERE (emp_code = ? OR id = ?) AND status = 1
      LIMIT 1"
@@ -73,6 +74,7 @@ if ($checkStmt) {
         $empRow = $checkResult->fetch_assoc();
         $currentEmployeeId = (int)$empRow['id'];
         $registeredDeviceId = $empRow['device_id'];
+        $defaultWorkingFrom = trim((string)($empRow['default_working_from'] ?? ''));
 
         // If this employee already has a different device registered, reject
         if (!empty($registeredDeviceId) && $registeredDeviceId !== $device_id) {
@@ -83,6 +85,24 @@ if ($checkStmt) {
             $checkStmt->close();
             exit;
         }
+
+        // Do not allow clock in/out if no Working From is assigned
+        if ($defaultWorkingFrom === '') {
+            echo json_encode([
+                "status" => "error",
+                "msg" => "Working From is not assigned. Please contact administrator."
+            ]);
+            $checkStmt->close();
+            exit;
+        }
+    } else {
+        // No active employee found for this user_id
+        echo json_encode([
+            "status" => "error",
+            "msg" => "Employee not found or inactive. Please contact administrator."
+        ]);
+        $checkStmt->close();
+        exit;
     }
 
     $checkStmt->close();
@@ -184,6 +204,11 @@ if ($type === 'in') {
             }
         }
     }
+}
+
+// If app did not explicitly send working_from, fall back to the assigned default
+if ($working_from === '') {
+    $working_from = $defaultWorkingFrom;
 }
 
 // ---------------- INSERT ATTENDANCE LOG ----------------
