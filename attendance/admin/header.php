@@ -37,7 +37,7 @@
   .apps-dropdown {
     display: none;
     position: absolute;
-    width: 380px;
+    width: 300px;
     background: #fff;
     border-radius: 18px;
     box-shadow: 0 8px 32px rgba(0,0,0,0.18);
@@ -106,8 +106,8 @@
   .apps-grid {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
-    gap: 18px;
-    padding: 18px 24px 0 24px;
+    gap: 10px;
+    padding: 12px 12px 0 12px;
   }
   .app-item {
     display: flex;
@@ -148,6 +148,7 @@
     </svg>
     Apps
   </button>
+  <a href="developer_login.php" class="btn btn-warning me-2">🔒 Login</a>
   <span style="font-size:1.2rem;font-weight:600;color:#2563eb; margin-left:18px;">Setu Developers</span>
 </div>
 <!-- Apps Dropdown: must be outside header for absolute positioning -->
@@ -171,15 +172,60 @@
     <input type="text" class="apps-search-input" placeholder="Search apps..." onkeyup="filterApps(this.value)">
   </div>
   <div class="apps-grid" id="appsGrid">
-    <div class="app-item" data-name="company"><div class="app-icon" style="background: #16a34a;"></div><div class="app-name">Company</div></div>
-    <div class="app-item" data-name="dashboard"><div class="app-icon" style="background: #3b82f6;"></div><div class="app-name">Dashboard</div></div>
-    <div class="app-item" data-name="reception"><div class="app-icon" style="background: #2563eb;"></div><div class="app-name">Reception</div></div>
-    <div class="app-item" data-name="hr"><div class="app-icon" style="background: #eab308;"></div><div class="app-name">HR</div></div>
-    <div class="app-item" data-name="recruitment"><div class="app-icon" style="background: #a855f7;"></div><div class="app-name">Recruitment</div></div>
-    <div class="app-item" data-name="leads"><div class="app-icon" style="background: #06b6d4;"></div><div class="app-name">Leads</div></div>
-    <div class="app-item" data-name="letters"><div class="app-icon" style="background: #14b8a6;"></div><div class="app-name">Letters</div></div>
-    <div class="app-item" data-name="legal"><div class="app-icon" style="background: #8b5cf6;"></div><div class="app-name">Legal</div></div>
-    <div class="app-item" data-name="contractors"><div class="app-icon" style="background: #f97316;"></div><div class="app-name">Contractors</div></div>
+    <div class="app-item" data-name="company">
+      <div class="app-icon" style="background: #16a34a;">
+        <span style="font-size: 1.3rem;">🏢</span>
+      </div>
+      <div class="app-name">Company</div>
+    </div>
+    <div class="app-item" data-name="dashboard">
+      <div class="app-icon" style="background: #3b82f6;">
+        <span style="font-size: 1.3rem;">📊</span>
+      </div>
+      <div class="app-name">Dashboard</div>
+    </div>
+    <div class="app-item" data-name="reception">
+      <div class="app-icon" style="background: #2563eb;">
+        <span style="font-size: 1.3rem;">🛎️</span>
+      </div>
+      <div class="app-name">Reception</div>
+    </div>
+    <div class="app-item" data-name="hr">
+      <div class="app-icon" style="background: #eab308;">
+        <span style="font-size: 1.3rem;">👥</span>
+      </div>
+      <div class="app-name">HR</div>
+    </div>
+    <div class="app-item" data-name="recruitment">
+      <div class="app-icon" style="background: #a855f7;">
+        <span style="font-size: 1.3rem;">📝</span>
+      </div>
+      <div class="app-name">Recruitment</div>
+    </div>
+    <div class="app-item" data-name="leads">
+      <div class="app-icon" style="background: #06b6d4;">
+        <span style="font-size: 1.3rem;">📈</span>
+      </div>
+      <div class="app-name">Leads</div>
+    </div>
+    <div class="app-item" data-name="letters">
+      <div class="app-icon" style="background: #14b8a6;">
+        <span style="font-size: 1.3rem;">✉️</span>
+      </div>
+      <div class="app-name">Letters</div>
+    </div>
+    <div class="app-item" data-name="legal">
+      <div class="app-icon" style="background: #8b5cf6;">
+        <span style="font-size: 1.3rem;">⚖️</span>
+      </div>
+      <div class="app-name">Legal</div>
+    </div>
+    <div class="app-item" data-name="contractors">
+      <div class="app-icon" style="background: #f97316;">
+        <span style="font-size: 1.3rem;">🧑‍🔧</span>
+      </div>
+      <div class="app-name">Contractors</div>
+    </div>
   </div>
 </div>
 <script>
@@ -207,7 +253,8 @@ document.addEventListener('DOMContentLoaded', function() {
       if (left < 12) left = 12; // Prevent from going off left edge
     }
     dropdown.style.left = left + 'px';
-    dropdown.style.top = (rect.bottom + window.scrollY) + 'px';
+    // Move modal 20px further down
+    dropdown.style.top = (rect.bottom + window.scrollY + 20) + 'px';
     // Hide again if it was hidden
     if (wasHidden) {
       dropdown.style.display = '';

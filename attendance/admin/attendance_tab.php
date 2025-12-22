@@ -320,18 +320,18 @@ body { background:#f5f6f8; font-family: Arial, sans-serif; }
 
 /* ---------- Header row (title + filters + add button) ---------- */
 .att-header-bar{
-    display:flex;
-    justify-content:space-between;
-    align-items:flex-end;
-    gap:16px;
-    margin-bottom:16px;
-    flex-wrap:wrap;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
 }
 .att-header-right{
-    display:flex;
-    align-items:center;
-    gap:10px;
-    flex-wrap:wrap;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
 }
 
 /* Legend */
@@ -520,15 +520,32 @@ body { background:#f5f6f8; font-family: Arial, sans-serif; }
 .att-cell-wrapper:hover .att-tooltip {
     display:block;
 }
+    #markAttendanceModal .modal-dialog {
+        width: 700px !important;
+        max-width: 98vw !important;
+        min-width: 320px !important;
+        margin: 4rem auto 1rem auto !important;
+        border-radius: 18px !important;
+    }
+    #markAttendanceModal .modal-xl,
+    #markAttendanceModal .modal-lg {
+        width: 700px !important;
+        max-width: 98vw !important;
+    }
+    #markAttendanceModal .modal-content {
+        width: 700px !important;
+        max-width: 98vw !important;
+        margin: 0 auto;
+        border-radius: 18px !important;
+    }
 </style>
 
 <div style="padding:20px;">
 
     <!-- HEADER ROW: title left, filters + add button right -->
     <div class="att-header-bar">
-
         <!-- LEFT: Title -->
-        <div>
+        <div style="display: flex; flex-direction: column; justify-content: center;">
             <h2 style="font-weight:700; margin-bottom:4px;">Attendance Management</h2>
             <div style="color:#6b7280; font-size:14px;">
                 Month: <strong><?php echo htmlspecialchars($monthName); ?></strong>
@@ -537,12 +554,10 @@ body { background:#f5f6f8; font-family: Arial, sans-serif; }
 
         <!-- RIGHT: Filters + +Add Attendance -->
         <div class="att-header-right">
-
             <!-- FILTERS -->
             <form id="attendanceFilterForm"
                   method="GET"
-                  style="display:flex; gap:10px;">
-
+                  style="display: flex; align-items: center; gap: 10px; margin-bottom: 0;">
                 <select name="month" class="att-filter-select">
                     <?php foreach ($monthNames as $m => $label): ?>
                         <option value="<?php echo $m; ?>" <?php echo ($m == $month?'selected':''); ?>>
@@ -550,7 +565,6 @@ body { background:#f5f6f8; font-family: Arial, sans-serif; }
                         </option>
                     <?php endforeach; ?>
                 </select>
-
                 <select name="year" class="att-filter-select">
                     <?php for ($y = $currentYear-3; $y <= $currentYear+3; $y++): ?>
                         <option value="<?php echo $y; ?>" <?php echo ($y == $year?'selected':''); ?>>
@@ -558,15 +572,14 @@ body { background:#f5f6f8; font-family: Arial, sans-serif; }
                         </option>
                     <?php endfor; ?>
                 </select>
-
                 <button class="btn btn-dark" type="submit">Apply</button>
             </form>
-
             <!-- ADD ATTENDANCE BUTTON (open Mark Attendance modal) -->
             <button type="button"
-		            class="btn btn-dark att-add-btn"
-		            data-bs-toggle="modal"
-		            data-bs-target="#markAttendanceModal">
+                class="btn btn-dark att-add-btn"
+                data-bs-toggle="modal"
+                data-bs-target="#markAttendanceModal"
+                style="margin-left: 8px;">
                 + Add Attendance
             </button>
         </div>
