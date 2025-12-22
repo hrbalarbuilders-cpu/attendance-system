@@ -2,7 +2,7 @@
 $host = "localhost";
 $user = "root";
 $pass = "";
-$db   = "attendance_db";  // ✅ yahi aapka DB name hai
+$db   = "attendance_db"; 
 
 $con = new mysqli($host, $user, $pass, $db);
 

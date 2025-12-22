@@ -9,9 +9,10 @@ import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as p;
 import 'package:sqflite/sqflite.dart';
+import 'apply_leave.dart';
 
 const String baseUrl =
-  "http://192.168.1.142:8080/attendance/attendance_api";
+  "http://192.168.1.132:8080/attendance/attendance_api";
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -365,7 +366,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   List<Map<String, dynamic>> wishes = [];
   bool wishesLoading = false;
 
-  int userId = 1; // Will be loaded from SharedPreferences
+  int userId = 3; // Set to 3 for testing (should match employee_id in DB)
   String userName = "User"; // User name
   static const String workingFrom = "office"; // 'office' or 'home' (WFH)
 
@@ -2809,20 +2810,29 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                   ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: const [
-                      _QuickAction(
-                        icon: Icons.flight_takeoff,
-                        label: "Apply\nLeave",
+                    children: [
+                      GestureDetector(
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (context) => ApplyLeaveView(employeeId: 4),
+                            ),
+                          );
+                        },
+                        child: const _QuickAction(
+                          icon: Icons.flight_takeoff,
+                          label: "Apply\nLeave",
+                        ),
                       ),
-                      _QuickAction(
+                      const _QuickAction(
                         icon: Icons.receipt_long_outlined,
                         label: "View\nPayslip",
                       ),
-                      _QuickAction(
+                      const _QuickAction(
                         icon: Icons.confirmation_num_outlined,
                         label: "Raise\nTicket",
                       ),
-                      _QuickAction(
+                      const _QuickAction(
                         icon: Icons.account_balance_wallet_outlined,
                         label: "Leave\nBalance",
                       ),
