@@ -1,4 +1,10 @@
 <?php
+// Suppress errors from being sent to output, log them instead
+ini_set('display_errors', 0);
+ini_set('display_startup_errors', 0);
+error_reporting(0);
+ini_set('log_errors', 1);
+ini_set('error_log', __DIR__ . '/php-error.log');
 date_default_timezone_set('Asia/Kolkata');
 header('Content-Type: application/json');
 
@@ -29,12 +35,6 @@ try {
     $empCodePattern = "EMP" . str_pad((string)$user_id, 3, '0', STR_PAD_LEFT);
     $shiftStmt = $con->prepare("
         SELECT e.id, s.start_time, s.end_time, s.late_mark_after, s.lunch_start, s.lunch_end
-        FROM employees e
-        LEFT JOIN shifts s ON e.shift_id = s.id
-        WHERE (e.emp_code = ? OR e.id = ?) AND e.status = 1
-        LIMIT 1
-    ");
-        SELECT e.id, s.start_time, s.end_time, s.late_mark_after
         FROM employees e
         LEFT JOIN shifts s ON e.shift_id = s.id
         WHERE (e.emp_code = ? OR e.id = ?) AND e.status = 1
