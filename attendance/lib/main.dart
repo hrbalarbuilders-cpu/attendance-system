@@ -2350,6 +2350,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         _showSnack('Failed to load summary. Please try again.');
       }
     } catch (e) {
+      debugPrint('Error in _showDaySummary: ' + e.toString());
       if (Navigator.of(context).canPop()) {
         Navigator.of(context).pop();
       }
