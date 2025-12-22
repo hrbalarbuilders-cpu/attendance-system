@@ -24,9 +24,11 @@ if ($to_date === '') {
     $to_date = $from_date;
 }
 
-// Check for existing pending leave for the same date(s)
-$conflictQuery = $con->prepare("SELECT id FROM leave_applications WHERE employee_id = ? AND leave_type_id = ? AND status = 'pending' AND ((from_date <= ? AND to_date >= ?) OR (from_date <= ? AND to_date >= ?)) LIMIT 1");
-$conflictQuery->bind_param('iissss', $emp_id, $leave_type_id, $from_date, $from_date, $to_date, $to_date);
+
+
+// Check for any overlap with existing pending leaves for the same type and employee
+$conflictQuery = $con->prepare("SELECT id FROM leave_applications WHERE employee_id = ? AND leave_type_id = ? AND status = 'pending' AND NOT (to_date < ? OR from_date > ?)");
+$conflictQuery->bind_param('iiss', $emp_id, $leave_type_id, $from_date, $to_date);
 $conflictQuery->execute();
 $conflictQuery->store_result();
 if ($conflictQuery->num_rows > 0) {
@@ -36,6 +38,19 @@ if ($conflictQuery->num_rows > 0) {
     exit;
 }
 $conflictQuery->close();
+
+// Prevent applying for leave on dates where an approved leave already exists (any type)
+$approvedConflict = $con->prepare("SELECT id, from_date, to_date FROM leave_applications WHERE employee_id = ? AND status = 'approved' AND NOT (to_date < ? OR from_date > ?)");
+$approvedConflict->bind_param('iss', $emp_id, $from_date, $to_date);
+$approvedConflict->execute();
+$approvedConflict->store_result();
+if ($approvedConflict->num_rows > 0) {
+    echo json_encode(['status' => 'error', 'msg' => 'Leave already approved for the selected date(s).']);
+    $approvedConflict->close();
+    $con->close();
+    exit;
+}
+$approvedConflict->close();
 
 try {
     $stmt = $con->prepare("INSERT INTO leave_applications (employee_id, leave_type_id, from_date, to_date, reason, status, created_at) VALUES (?, ?, ?, ?, ?, 'pending', NOW())");

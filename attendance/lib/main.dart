@@ -10,6 +10,7 @@ import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as p;
 import 'package:sqflite/sqflite.dart';
 import 'apply_leave.dart';
+import 'leave_history.dart';
 
 const String baseUrl =
   "http://192.168.1.132:8080/attendance/attendance_api";
@@ -2281,35 +2282,31 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) =>
-          const Center(child: CircularProgressIndicator(color: Colors.white)),
+      builder: (context) => const Center(child: CircularProgressIndicator(color: Colors.white)),
     );
-
     try {
       final res = await http.get(
         Uri.parse(
           "$baseUrl/get_day_summary.php?user_id=$userId&date=$dateString",
         ),
       );
-
-      Navigator.of(context).pop(); // Close loading
-
+      // Always close the loading dialog if it's open
+      if (Navigator.of(context).canPop()) {
+        Navigator.of(context).pop();
+      }
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         if (data['status'] == 'success') {
           final summary = data['data'];
           final hasAttendance = summary['has_attendance'] ?? false;
-
           if (!hasAttendance) {
             _showSnack('No attendance recorded for this day');
             return;
           }
-
           final lateMin = summary['late_minutes'] ?? 0;
           final grossMin = summary['gross_minutes'] ?? 0;
           final effectiveMin = summary['effective_minutes'] ?? 0;
           final breakMin = summary['break_minutes'] ?? 0;
-
           final lateH = lateMin ~/ 60;
           final lateM = lateMin % 60;
           final grossH = grossMin ~/ 60;
@@ -2318,7 +2315,6 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
           final effectiveM = effectiveMin % 60;
           final breakH = breakMin ~/ 60;
           final breakM = breakMin % 60;
-
           showDialog(
             context: context,
             builder: (context) => AlertDialog(
@@ -2333,33 +2329,10 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _SummaryRow(
-                    icon: Icons.schedule,
-                    color: Colors.red,
-                    label: 'Late Time',
-                    value: lateMin > 0 ? '${lateH}h ${lateM}m' : 'On Time',
-                  ),
-                  const SizedBox(height: 12),
-                  _SummaryRow(
-                    icon: Icons.access_time,
-                    color: Colors.blue,
-                    label: 'Gross Time',
-                    value: '${grossH}h ${grossM}m',
-                  ),
-                  const SizedBox(height: 12),
-                  _SummaryRow(
-                    icon: Icons.timer,
-                    color: Colors.green,
-                    label: 'Effective Time',
-                    value: '${effectiveH}h ${effectiveM}m',
-                  ),
-                  const SizedBox(height: 12),
-                  _SummaryRow(
-                    icon: Icons.coffee,
-                    color: Colors.orange,
-                    label: 'Break Time',
-                    value: '${breakH}h ${breakM}m',
-                  ),
+                  Text('Gross Time: ${grossH}h ${grossM}m'),
+                  Text('Effective Time: ${effectiveH}h ${effectiveM}m'),
+                  Text('Breaks: ${breakH}h ${breakM}m'),
+                  Text('Late: ${lateH}h ${lateM}m'),
                 ],
               ),
               actions: [
@@ -2371,14 +2344,16 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
             ),
           );
         } else {
-          _showSnack(data['msg'] ?? 'Failed to fetch day summary');
+          _showSnack('No summary data found for this day.');
         }
       } else {
-        _showSnack('Failed to fetch day summary');
+        _showSnack('Failed to load summary. Please try again.');
       }
     } catch (e) {
-      Navigator.of(context).pop(); // Close loading if error
-      _showSnack('Error fetching day summary');
+      if (Navigator.of(context).canPop()) {
+        Navigator.of(context).pop();
+      }
+      _showSnack('An error occurred. Please try again.');
     }
   }
 
@@ -2812,10 +2787,12 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
                       GestureDetector(
-                        onTap: () {
+                        onTap: () async {
+                          final prefs = await SharedPreferences.getInstance();
+                          final employeeId = prefs.getInt('employee_id') ?? 0;
                           Navigator.of(context).push(
                             MaterialPageRoute(
-                              builder: (context) => ApplyLeaveView(employeeId: 4),
+                              builder: (context) => ApplyLeaveView(employeeId: employeeId),
                             ),
                           );
                         },
@@ -2832,9 +2809,18 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                         icon: Icons.confirmation_num_outlined,
                         label: "Raise\nTicket",
                       ),
-                      const _QuickAction(
-                        icon: Icons.account_balance_wallet_outlined,
-                        label: "Leave\nBalance",
+                      GestureDetector(
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (context) => LeaveHistoryView(employeeId: 4),
+                            ),
+                          );
+                        },
+                        child: const _QuickAction(
+                          icon: Icons.account_balance_wallet_outlined,
+                          label: "Leave\nHistory",
+                        ),
                       ),
                     ],
                   ),

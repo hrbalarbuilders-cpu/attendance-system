@@ -209,10 +209,18 @@ function determineAttendanceStatus($dayData, $date, $shiftInfo = null, $weekoffD
         }
         return ['status' => 'A', 'tooltip' => 'Absent'];
     }
-    
+
     $logs = $dayData['logs'];
     $logCount = count($logs);
-    
+
+    // Check for leave log (type = 'leave')
+    foreach ($logs as $log) {
+        if (strtolower($log['type']) === 'leave') {
+            $leaveReason = !empty($log['reason']) ? ucfirst($log['reason']) : 'Leave';
+            return ['status' => 'LV', 'tooltip' => $leaveReason];
+        }
+    }
+
     // Separate IN and OUT logs
     $inLogs = [];
     $outLogs = [];
@@ -223,7 +231,7 @@ function determineAttendanceStatus($dayData, $date, $shiftInfo = null, $weekoffD
             $outLogs[] = $log;
         }
     }
-    
+
     // Sort by time
     usort($inLogs, function($a, $b) {
         return strtotime($a['time']) - strtotime($b['time']);
@@ -231,10 +239,10 @@ function determineAttendanceStatus($dayData, $date, $shiftInfo = null, $weekoffD
     usort($outLogs, function($a, $b) {
         return strtotime($a['time']) - strtotime($b['time']);
     });
-    
+
     $firstIn = !empty($inLogs) ? $inLogs[0] : null;
     $lastOut = !empty($outLogs) ? $outLogs[count($outLogs) - 1] : null;
-    
+
     // Get reason from logs (ENUM: 'normal', 'lunch', 'tea')
     $reason = strtolower(trim($firstIn['reason'] ?? $lastOut['reason'] ?? 'normal'));
     
