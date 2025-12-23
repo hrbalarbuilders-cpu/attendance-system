@@ -260,11 +260,13 @@ if ($stmt->execute()) {
     }
 
     echo json_encode(["status" => "success"]);
+    exit;
 } else {
     echo json_encode([
         "status" => "error",
         "msg"    => "DB error: " . $stmt->error
     ]);
+    exit;
 }
 
 $stmt->close();

@@ -4,6 +4,14 @@ header('Content-Type: application/json');
 
 include "db.php";
 
+// TEMP DEBUG: Log basic request info to help diagnose login issues
+$debugLog = __DIR__ . '/login_debug.log';
+$reqBody = file_get_contents('php://input');
+$remoteIp = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+$logMsg = date('Y-m-d H:i:s') . " | IP: $remoteIp | METHOD: {$_SERVER['REQUEST_METHOD']} | POST: " . json_encode($_POST) . " | RAW: " . substr($reqBody, 0, 2000) . "\n";
+file_put_contents($debugLog, $logMsg, FILE_APPEND);
+
+
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     echo json_encode([
         "status" => "error",
@@ -11,6 +19,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     ]);
     exit;
 }
+
 
 $email = isset($_POST['email']) ? trim($_POST['email']) : '';
 $password = isset($_POST['password']) ? trim($_POST['password']) : '';

@@ -1,0 +1,3 @@
+# Ignore local debug logs and editor files
+attendance/attendance_api/*.log
+.vscode/

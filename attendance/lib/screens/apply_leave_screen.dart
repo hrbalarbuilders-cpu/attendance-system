@@ -1,16 +1,16 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
+import '../services/leave_service.dart';
 
-class ApplyLeaveView extends StatefulWidget {
-  final int employeeId; // Pass the logged-in employee's ID
-  const ApplyLeaveView({Key? key, required this.employeeId}) : super(key: key);
+class ApplyLeaveScreen extends StatefulWidget {
+  final int employeeId;
+  const ApplyLeaveScreen({super.key, required this.employeeId});
 
   @override
-  State<ApplyLeaveView> createState() => _ApplyLeaveViewState();
+  State<ApplyLeaveScreen> createState() => _ApplyLeaveScreenState();
 }
 
-class _ApplyLeaveViewState extends State<ApplyLeaveView> {
+class _ApplyLeaveScreenState extends State<ApplyLeaveScreen> {
+  final LeaveService leaveService = LeaveService();
   List<Map<String, dynamic>> leaveTypes = [];
   List<Map<String, dynamic>> leaveBalances = [
     {'type': 'Casual Leave', 'balance': 5},
@@ -24,7 +24,7 @@ class _ApplyLeaveViewState extends State<ApplyLeaveView> {
   final TextEditingController reasonController = TextEditingController();
   bool isLoading = true;
   String? errorMsg;
-  String leaveDateType = 'single'; // 'single' or 'multiple'
+  String leaveDateType = 'single';
 
   @override
   void initState() {
@@ -34,25 +34,12 @@ class _ApplyLeaveViewState extends State<ApplyLeaveView> {
 
   Future<void> fetchLeaveTypes() async {
     setState(() { isLoading = true; errorMsg = null; });
-    print('Calling API for employeeId: \\${widget.employeeId}');
     try {
-      final response = await http.get(Uri.parse(
-        'http://192.168.1.132:8080/attendance/attendance_api/get_employee_leaves.php?emp_id=${widget.employeeId}',
-      ));
-      print('API response: ' + response.body); // DEBUG PRINT
-      final data = json.decode(response.body);
-      if (data['status'] == 'success') {
-        setState(() {
-          leaveTypes = List<Map<String, dynamic>>.from(data['leave_types']);
-          print('Leave types loaded: ' + leaveTypes.toString()); // DEBUG PRINT
-          isLoading = false;
-        });
-      } else {
-        setState(() {
-          errorMsg = data['msg'] ?? 'Failed to load leave types.';
-          isLoading = false;
-        });
-      }
+      final types = await leaveService.fetchLeaveTypes(widget.employeeId);
+      setState(() {
+        leaveTypes = types.map<Map<String, dynamic>>((e) => Map<String, dynamic>.from(e)).toList();
+        isLoading = false;
+      });
     } catch (e) {
       setState(() {
         errorMsg = 'Error: $e';
@@ -69,7 +56,6 @@ class _ApplyLeaveViewState extends State<ApplyLeaveView> {
       lastDate: DateTime(2100),
     );
     if (picked != null) {
-      // Format as DD-MM-YYYY for display, but send as YYYY-MM-DD to backend
       controller.text = "${picked.day.toString().padLeft(2, '0')}-${picked.month.toString().padLeft(2, '0')}-${picked.year}";
     }
   }
@@ -148,7 +134,7 @@ class _ApplyLeaveViewState extends State<ApplyLeaveView> {
                                               child: Text(type['name']),
                                             ))
                                         .toList(),
-                                    value: selectedLeaveType,
+                                    initialValue: selectedLeaveType,
                                     onChanged: (value) {
                                       setState(() {
                                         selectedLeaveType = value;
@@ -163,29 +149,25 @@ class _ApplyLeaveViewState extends State<ApplyLeaveView> {
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
+                                      // Use ChoiceChips instead of RadioListTile (avoids deprecated Radio groupValue API)
                                       Row(
                                         children: [
                                           Expanded(
-                                            child: RadioListTile<String>(
-                                              title: const Text('Single Leave'),
-                                              value: 'single',
-                                              groupValue: leaveDateType,
-                                              onChanged: (value) {
-                                                setState(() {
-                                                  leaveDateType = value!;
-                                                });
+                                            child: ChoiceChip(
+                                              label: const Text('Single Leave'),
+                                              selected: leaveDateType == 'single',
+                                              onSelected: (sel) {
+                                                if (sel) setState(() => leaveDateType = 'single');
                                               },
                                             ),
                                           ),
+                                          const SizedBox(width: 8),
                                           Expanded(
-                                            child: RadioListTile<String>(
-                                              title: const Text('Multiple Leave'),
-                                              value: 'multiple',
-                                              groupValue: leaveDateType,
-                                              onChanged: (value) {
-                                                setState(() {
-                                                  leaveDateType = value!;
-                                                });
+                                            child: ChoiceChip(
+                                              label: const Text('Multiple Leave'),
+                                              selected: leaveDateType == 'multiple',
+                                              onSelected: (sel) {
+                                                if (sel) setState(() => leaveDateType = 'multiple');
                                               },
                                             ),
                                           ),
@@ -244,7 +226,6 @@ class _ApplyLeaveViewState extends State<ApplyLeaveView> {
                                   width: double.infinity,
                                   child: ElevatedButton(
                                     onPressed: () async {
-                                      // Find leave_type_id from selectedLeaveType
                                       final selectedType = leaveTypes.firstWhere(
                                         (type) => type['name'] == selectedLeaveType,
                                         orElse: () => <String, dynamic>{},
@@ -260,7 +241,6 @@ class _ApplyLeaveViewState extends State<ApplyLeaveView> {
                                       final toDateStr = leaveDateType == 'multiple' && toDateController.text.isNotEmpty
                                           ? toDateController.text
                                           : fromDateStr;
-                                      // Parse DD-MM-YYYY to DateTime
                                       DateTime? fromDateParsed;
                                       DateTime? toDateParsed;
                                       try {
@@ -283,25 +263,21 @@ class _ApplyLeaveViewState extends State<ApplyLeaveView> {
                                       final fromDate = "${fromDateParsed.year}-${fromDateParsed.month.toString().padLeft(2, '0')}-${fromDateParsed.day.toString().padLeft(2, '0')}";
                                       final toDate = "${toDateParsed.year}-${toDateParsed.month.toString().padLeft(2, '0')}-${toDateParsed.day.toString().padLeft(2, '0')}";
                                       final reason = reasonController.text;
-                                      final response = await http.post(
-                                        Uri.parse('http://192.168.1.132:8080/attendance/attendance_api/apply_leave.php'),
-                                        headers: {'Content-Type': 'application/json'},
-                                        body: json.encode({
-                                          'employee_id': widget.employeeId,
-                                          'leave_type_id': leaveTypeId,
+                                      final messenger = ScaffoldMessenger.of(context);
+                                      try {
+                                        final success = await leaveService.applyLeave({
+                                          'employee_id': widget.employeeId.toString(),
+                                          'leave_type_id': leaveTypeId.toString(),
                                           'from_date': fromDate,
                                           'to_date': toDate,
                                           'reason': reason,
-                                        }),
-                                      );
-                                      final data = json.decode(response.body);
-                                      if (data['status'] == 'error' && (data['msg']?.toString().toLowerCase().contains('already applied') ?? false)) {
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          SnackBar(content: Text('You already have a pending leave for the selected date(s).')),
+                                        });
+                                        messenger.showSnackBar(
+                                          SnackBar(content: Text(success ? 'Leave applied successfully' : 'Failed to apply leave')),
                                         );
-                                      } else {
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          SnackBar(content: Text(data['msg'] ?? 'Leave request submitted')),
+                                      } catch (e) {
+                                        messenger.showSnackBar(
+                                          SnackBar(content: Text(e.toString())),
                                         );
                                       }
                                     },

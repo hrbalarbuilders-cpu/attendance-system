@@ -1,17 +1,16 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
+import '../services/leave_service.dart';
 
-
-class LeaveHistoryView extends StatefulWidget {
+class LeaveHistoryScreen extends StatefulWidget {
   final int employeeId;
-  const LeaveHistoryView({Key? key, required this.employeeId}) : super(key: key);
+  const LeaveHistoryScreen({super.key, required this.employeeId});
 
   @override
-  State<LeaveHistoryView> createState() => _LeaveHistoryViewState();
+  State<LeaveHistoryScreen> createState() => _LeaveHistoryScreenState();
 }
 
-class _LeaveHistoryViewState extends State<LeaveHistoryView> {
+class _LeaveHistoryScreenState extends State<LeaveHistoryScreen> {
+  final LeaveService leaveService = LeaveService();
   List<dynamic> history = [];
   bool isLoading = true;
   String? errorMsg;
@@ -25,21 +24,11 @@ class _LeaveHistoryViewState extends State<LeaveHistoryView> {
   Future<void> fetchHistory() async {
     setState(() { isLoading = true; errorMsg = null; });
     try {
-      final response = await http.get(Uri.parse(
-        'http://192.168.1.132:8080/attendance/attendance_api/get_leave_history.php?emp_id=${widget.employeeId}',
-      ));
-      final data = json.decode(response.body);
-      if (data['status'] == 'success') {
-        setState(() {
-          history = data['history'] ?? [];
-          isLoading = false;
-        });
-      } else {
-        setState(() {
-          errorMsg = data['msg'] ?? 'Failed to load leave history.';
-          isLoading = false;
-        });
-      }
+      final result = await leaveService.fetchLeaveHistory(widget.employeeId);
+      setState(() {
+        history = result;
+        isLoading = false;
+      });
     } catch (e) {
       setState(() {
         errorMsg = 'Error: $e';
@@ -49,16 +38,19 @@ class _LeaveHistoryViewState extends State<LeaveHistoryView> {
   }
 
   Future<void> cancelLeave(int leaveId) async {
-    final response = await http.post(
-      Uri.parse('http://192.168.1.132:8080/attendance/attendance_api/cancel_leave.php'),
-      headers: {'Content-Type': 'application/json'},
-      body: json.encode({'leave_id': leaveId}),
-    );
-    final data = json.decode(response.body);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(data['msg'] ?? 'Cancel request sent')),
-    );
-    if (data['status'] == 'success') fetchHistory();
+    try {
+      final msg = await leaveService.cancelLeave(leaveId);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(msg)),
+      );
+      fetchHistory();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString())),
+      );
+    }
   }
 
   @override
@@ -73,7 +65,7 @@ class _LeaveHistoryViewState extends State<LeaveHistoryView> {
                   ? const Center(child: Text('No leave history found.'))
                   : ListView.separated(
                       itemCount: history.length,
-                      separatorBuilder: (_, __) => const Divider(height: 1),
+                      separatorBuilder: (context, index) => const Divider(height: 1),
                       itemBuilder: (context, i) {
                         String formatDate(String? ymd) {
                           if (ymd == null || ymd.isEmpty) return '';
@@ -154,5 +146,4 @@ class _LeaveHistoryViewState extends State<LeaveHistoryView> {
                     ),
     );
   }
-// ...existing code...
 }

@@ -5,10 +5,24 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "attendance",
+            "name": "attendance (Dev API)",
             "cwd": "attendance",
             "request": "launch",
-            "type": "dart"
+            "type": "dart",
+            "args": [
+                "--target=lib/main.dart",
+                "--dart-define=API_BASE_URL=http://192.168.1.132:8080/attendance/attendance_api/"
+            ]
+        },
+        {
+            "name": "attendance (Prod API)",
+            "cwd": "attendance",
+            "request": "launch",
+            "type": "dart",
+            "args": [
+                "--target=lib/main.dart",
+                "--dart-define=API_BASE_URL=https://demosoftware.kesug.com/attendance-system/attendance/attendance_api/login.php/"
+            ]
         },
         {
             "name": "attendance (profile mode)",
