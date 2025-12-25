@@ -38,7 +38,6 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
       setState(() {
         clockMessage = 'User not found.';
       });
-      print('User not found.');
       return;
     }
     setState(() {
@@ -46,7 +45,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
       clockMessage = null;
     });
     final now = DateTime.now();
-    final url = Uri.parse('$kBaseUrl/clock.php');
+    final url = kBaseUri.resolve('clock.php');
     final deviceId = 'flutter_device';
     final body = {
       'user_id': userId.toString(),
@@ -59,11 +58,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
       'reason': type == 'in' ? 'shift_start' : 'shift_end',
     };
     try {
-      print('Sending request to: ${url.toString()}');
-      print('Request body: ${body.toString()}');
       final response = await http.post(url, body: body);
-      print('Response status: ${response.statusCode}');
-      print('Response body: ${response.body}');
       final data = json.decode(response.body);
       setState(() {
         clockMessage = response.body;
@@ -79,7 +74,6 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         });
       }
     } catch (e) {
-      print('Exception: ${e.toString()}');
       setState(() {
         clockMessage = 'Network error: ${e.toString()}';
       });
@@ -168,7 +162,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Color.fromARGB((0.05 * 255).toInt(), 0, 0, 0),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -397,7 +391,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
             border: Border.all(color: Colors.grey[300]!, width: 1),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.04),
+                color: Color.fromARGB((0.04 * 255).toInt(), 0, 0, 0),
                 blurRadius: 6,
                 offset: const Offset(0, 2),
               ),
@@ -432,7 +426,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Color.fromARGB((0.05 * 255).toInt(), 0, 0, 0),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -516,7 +510,12 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                 )
               : CircleAvatar(
                   radius: 18,
-                  backgroundColor: color.withOpacity(0.2),
+                  backgroundColor: Color.fromARGB(
+                    (0.2 * 255).toInt(),
+                    (color.r * 255.0).round().clamp(0, 255),
+                    (color.g * 255.0).round().clamp(0, 255),
+                    (color.b * 255.0).round().clamp(0, 255),
+                  ),
                   child: Text(
                     initials,
                     style: TextStyle(
@@ -566,7 +565,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Color.fromARGB((0.05 * 255).toInt(), 0, 0, 0),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),

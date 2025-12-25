@@ -11,7 +11,7 @@
             "type": "dart",
             "args": [
                 "--target=lib/main.dart",
-                "--dart-define=API_BASE_URL=http://192.168.1.132:8080/attendance/attendance_api/"
+                "--dart-define=API_BASE_URL=http://192.168.1.146:8080/attendance/attendance_api/"
             ]
         },
         {

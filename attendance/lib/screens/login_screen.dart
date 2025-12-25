@@ -3,6 +3,7 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'dart:async';
 import 'attendance_screen.dart';
 import 'package:attendance/config.dart';
 
@@ -35,8 +36,14 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _isLoading = true);
 
     try {
-      final conn = await Connectivity().checkConnectivity();
-      if (conn.contains(ConnectivityResult.none) || conn.isEmpty) {
+      final dynamic conn = await Connectivity().checkConnectivity();
+      bool noConnection = false;
+      if (conn is ConnectivityResult) {
+        noConnection = conn == ConnectivityResult.none;
+      } else if (conn is List<ConnectivityResult>) {
+        noConnection = conn.contains(ConnectivityResult.none);
+      }
+      if (noConnection) {
         setState(() => _isLoading = false);
         _showSnack("No internet connection. Please connect to internet.");
         return;
@@ -51,6 +58,7 @@ class _LoginScreenState extends State<LoginScreen> {
             },
           )
           .timeout(const Duration(seconds: 10));
+      // debug prints removed
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -79,7 +87,7 @@ class _LoginScreenState extends State<LoginScreen> {
         setState(() => _isLoading = false);
 
         // Try to extract a useful message from non-200 responses
-        String message = "Server error ({response.statusCode}). Please try again.";
+        String message = "Server error (${response.statusCode}). Please try again.";
         try {
           final decoded = jsonDecode(response.body);
           if (decoded is Map && decoded['msg'] is String) {
@@ -91,9 +99,18 @@ class _LoginScreenState extends State<LoginScreen> {
 
         _showSnack(message);
       }
+    } on http.ClientException catch (e) {
+      setState(() => _isLoading = false);
+      _showSnack("HTTP error: \\${e.message}");
+    } on FormatException catch (e) {
+      setState(() => _isLoading = false);
+      _showSnack("Invalid response format: \\${e.message}");
+    } on TimeoutException {
+      setState(() => _isLoading = false);
+      _showSnack("Request timed out. Please try again.");
     } catch (e) {
       setState(() => _isLoading = false);
-      _showSnack("Network error. Please check your connection and try again.");
+      _showSnack("Network error: \\${e.toString()}");
     }
   }
 
@@ -147,6 +164,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ),
                 const SizedBox(height: 32),
+                // ...existing code...
                 Card(
                   elevation: 3,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
