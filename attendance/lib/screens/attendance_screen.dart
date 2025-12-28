@@ -3,6 +3,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:math' as math;
 import 'dart:async';
 import 'login_screen.dart';
+import 'apply_leave_screen.dart';
+import 'leave_history_screen.dart';
 import 'day_logs_screen.dart';
 import 'weekly_log_card.dart';
 import '../config.dart';
@@ -685,10 +687,32 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
   Widget _buildActionButtons() {
     return Row(
       children: [
-        Expanded(child: _buildActionButton(Icons.flight_outlined, 'Apply\nLeave')),
+        Expanded(
+          child: GestureDetector(
+            onTap: () {
+              if (userId == null || userId == 0) {
+                BottomBanner.show(context, 'User not found.', success: false);
+                return;
+              }
+              Navigator.of(context).push(MaterialPageRoute(builder: (_) => ApplyLeaveScreen(employeeId: userId!)));
+            },
+            child: _buildActionButton(Icons.flight_outlined, 'Apply\nLeave'),
+          ),
+        ),
         Expanded(child: _buildActionButton(Icons.receipt_long_outlined, 'View\nPayslip')),
         Expanded(child: _buildActionButton(Icons.confirmation_number_outlined, 'Raise\nTicket')),
-        Expanded(child: _buildActionButton(Icons.history, 'Leave\nHistory')),
+        Expanded(
+          child: GestureDetector(
+            onTap: () {
+              if (userId == null || userId == 0) {
+                BottomBanner.show(context, 'User not found.', success: false);
+                return;
+              }
+              Navigator.of(context).push(MaterialPageRoute(builder: (_) => LeaveHistoryScreen(employeeId: userId!)));
+            },
+            child: _buildActionButton(Icons.history, 'Leave\nHistory'),
+          ),
+        ),
       ],
     );
   }
