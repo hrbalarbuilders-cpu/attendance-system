@@ -37,3 +37,29 @@ Examples:
 ### VS Code launch configurations
 Use the **Run and Debug** panel and select **attendance (Dev API)** or **attendance (Prod API)** to launch with the appropriate configuration.
 
+### PHP lint and tests
+
+If you modify API PHP files, you can lint them locally (requires PHP CLI in PATH).
+
+- Windows (PowerShell):
+
+```
+cd attendance
+\.\scripts\lint-php.ps1
+```
+
+- Unix / Git Bash:
+
+```
+cd attendance
+./scripts/lint-php.sh
+```
+
+There is also a basic PHPUnit test skeleton at `attendance_api/tests/GetUserShiftTest.php`. To run it you need PHPUnit installed (via Composer) and the server running. Example (install Composer dependencies first):
+
+```
+cd attendance/attendance_api
+composer require --dev phpunit/phpunit
+./vendor/bin/phpunit tests/GetUserShiftTest.php
+```
+

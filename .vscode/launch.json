@@ -5,16 +5,6 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "attendance (Dev API)",
-            "cwd": "attendance",
-            "request": "launch",
-            "type": "dart",
-            "args": [
-                "--target=lib/main.dart",
-                "--dart-define=API_BASE_URL=http://192.168.1.146:8080/attendance/attendance_api/"
-            ]
-        },
-        {
             "name": "attendance (Prod API)",
             "cwd": "attendance",
             "request": "launch",
@@ -22,6 +12,26 @@
             "args": [
                 "--target=lib/main.dart",
                 "--dart-define=API_BASE_URL=https://demosoftware.kesug.com/attendance-system/attendance/attendance_api/login.php/"
+            ]
+        },
+        {
+            "name": "attendance (Dev - Office)",
+            "cwd": "attendance",
+            "request": "launch",
+            "type": "dart",
+            "args": [
+                "--target=lib/main.dart",
+                "--dart-define=API_BASE_URL=http://192.168.1.119:8080/attendance/attendance_api/"
+            ]
+        },
+        {
+            "name": "attendance (Dev - Home)",
+            "cwd": "attendance",
+            "request": "launch",
+            "type": "dart",
+            "args": [
+                "--target=lib/main.dart",
+                "--dart-define=API_BASE_URL=http://192.168.1.146:8080/attendance/attendance_api/"
             ]
         },
         {

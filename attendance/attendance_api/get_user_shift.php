@@ -23,10 +23,13 @@ if ($user_id <= 0) {
        $stmt = $con->prepare("
            SELECT e.id, e.shift_id, e.status, 
                   s.shift_name, s.start_time, s.end_time, s.total_punches,
+                  e.default_working_from,
+                  w.label AS working_from_label,
                   s.early_clock_in_before, s.late_mark_after, s.half_day_after,
                   s.lunch_start, s.lunch_end
            FROM employees e
-           LEFT JOIN shifts s ON s.id = e.shift_id
+               LEFT JOIN shifts s ON s.id = e.shift_id
+               LEFT JOIN working_from_master w ON w.code = e.default_working_from
            WHERE (e.emp_code = ? OR e.id = ?) AND e.status = 1
            LIMIT 1
        ");
@@ -64,11 +67,18 @@ if ($result && $result->num_rows > 0) {
             $lunchEndTime = date('H:i', strtotime($row['lunch_end']));
         }
         
+        // Determine working_from label (if any)
+        $workingFromLabel = '';
+        if (!empty($row['working_from_label'])) {
+            $workingFromLabel = $row['working_from_label'];
+        }
+
         echo json_encode([
             "status" => "success",
             "shift_name" => $row['shift_name'],
             "start_time" => $startTime,
             "end_time" => $endTime,
+            "working_from" => $workingFromLabel,
             "total_punches" => (int)($row['total_punches'] ?? 4),
             "early_clock_in_before" => (int)($row['early_clock_in_before'] ?? 0),
             "late_mark_after" => (int)($row['late_mark_after'] ?? 0),
