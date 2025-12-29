@@ -149,6 +149,17 @@
     color: #222;
   }
 </style>
+<?php
+// Compute web base path for admin folder so Apps links work regardless of document root.
+// If the script path contains '/admin', use that as the root (handles nested folders like /attendance/admin/hr).
+$script = str_replace('\\','/', $_SERVER['SCRIPT_NAME']);
+$adminPos = strpos($script, '/admin');
+if ($adminPos !== false) {
+  $base = substr($script, 0, $adminPos + strlen('/admin'));
+} else {
+  $base = rtrim(dirname($script), '/');
+}
+?>
 <div class="header-fixed">
   <button class="apps-btn" id="appsBtn">
     <svg class="menu-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -183,55 +194,55 @@
     <input type="text" class="apps-search-input" placeholder="Search apps..." onkeyup="filterApps(this.value)">
   </div>
   <div class="apps-grid" id="appsGrid">
-    <div class="app-item" data-name="company" data-href="/attendance/admin/index.php">
+    <div class="app-item" data-name="company" data-href="<?php echo $base; ?>/index.php" data-enabled="1">
       <div class="app-icon" style="background: #16a34a;">
         <span style="font-size: 1.3rem;">🏢</span>
       </div>
       <div class="app-name">Company</div>
     </div>
-    <div class="app-item" data-name="dashboard" data-href="/attendance/admin/index.php">
+    <div class="app-item" data-name="dashboard" data-href="<?php echo $base; ?>/index.php" data-enabled="1">
       <div class="app-icon" style="background: #3b82f6;">
         <span style="font-size: 1.3rem;">📊</span>
       </div>
       <div class="app-name">Dashboard</div>
     </div>
-    <div class="app-item" data-name="reception" data-href="/attendance/admin/index.php">
+    <div class="app-item" data-name="reception" data-href="<?php echo $base; ?>/index.php" data-enabled="1">
       <div class="app-icon" style="background: #2563eb;">
         <span style="font-size: 1.3rem;">🛎️</span>
       </div>
       <div class="app-name">Reception</div>
     </div>
-    <div class="app-item" data-name="hr" data-href="/attendance/admin/hr/employees.php">
+    <div class="app-item" data-name="hr" data-href="<?php echo $base; ?>/hr/employees.php" data-enabled="1">
       <div class="app-icon" style="background: #eab308;">
         <span style="font-size: 1.3rem;">👥</span>
       </div>
       <div class="app-name">HR</div>
     </div>
-    <div class="app-item" data-name="recruitment" data-href="/attendance/admin/index.php">
+    <div class="app-item" data-name="recruitment" data-href="<?php echo $base; ?>/index.php">
       <div class="app-icon" style="background: #a855f7;">
         <span style="font-size: 1.3rem;">📝</span>
       </div>
       <div class="app-name">Recruitment</div>
     </div>
-    <div class="app-item" data-name="leads" data-href="/attendance/admin/leads/leads.php">
+    <div class="app-item" data-name="leads" data-href="<?php echo $base; ?>/leads/leads.php" data-enabled="1">
       <div class="app-icon" style="background: #06b6d4;">
         <span style="font-size: 1.3rem;">📈</span>
       </div>
       <div class="app-name">Leads</div>
     </div>
-    <div class="app-item" data-name="letters" data-href="/attendance/admin/index.php">
+    <div class="app-item" data-name="letters" data-href="<?php echo $base; ?>/index.php">
       <div class="app-icon" style="background: #14b8a6;">
         <span style="font-size: 1.3rem;">✉️</span>
       </div>
       <div class="app-name">Letters</div>
     </div>
-    <div class="app-item" data-name="legal" data-href="/attendance/admin/index.php">
+    <div class="app-item" data-name="legal" data-href="<?php echo $base; ?>/index.php">
       <div class="app-icon" style="background: #8b5cf6;">
         <span style="font-size: 1.3rem;">⚖️</span>
       </div>
       <div class="app-name">Legal</div>
     </div>
-    <div class="app-item" data-name="contractors" data-href="/attendance/admin/index.php">
+    <div class="app-item" data-name="contractors" data-href="<?php echo $base; ?>/index.php">
       <div class="app-icon" style="background: #f97316;">
         <span style="font-size: 1.3rem;">🧑‍🔧</span>
       </div>
@@ -290,20 +301,27 @@ document.addEventListener('DOMContentLoaded', function() {
   });
   document.querySelectorAll('.app-item').forEach(function(item) {
     item.addEventListener('click', function(e) {
-      // Prefer explicit data-href if provided; fallback to data-name mapping
+      // Prefer explicit data-href if provided; check data-enabled flag for implemented apps
       const href = item.getAttribute('data-href');
+      const enabled = item.getAttribute('data-enabled');
       if (href) {
-        // Use assign to ensure navigation even if other handlers run
-        window.location.assign(href);
-        return;
+        if (enabled === '1') {
+          // Use assign to ensure navigation even if other handlers run
+          window.location.assign(href);
+          return;
+        } else {
+          alert('This app is not yet implemented.');
+          return;
+        }
       }
+      // No explicit href: fallback to name mapping for a few known routes
       const name = item.getAttribute('data-name');
       if (name === 'hr') {
-        window.location.assign('/attendance/admin/hr/employees.php');
+        window.location.assign('<?php echo $base; ?>/hr/employees.php');
       } else if (name === 'leads') {
-        window.location.assign('/attendance/admin/leads/leads.php');
+        window.location.assign('<?php echo $base; ?>/leads/leads.php');
       } else if (name === 'dashboard') {
-        window.location.assign('/attendance/admin/index.php');
+        window.location.assign('<?php echo $base; ?>/index.php');
       } else {
         alert('This app is not yet implemented.');
       }
