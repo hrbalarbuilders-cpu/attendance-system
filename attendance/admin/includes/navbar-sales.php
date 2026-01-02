@@ -1,5 +1,10 @@
 <?php
 // Shared Sales navbar (for Leads, Clients, Sources etc.)
+// highlight the current page's pill
+$current = basename($_SERVER['PHP_SELF'] ?? '');
+function nav_class($target, $current) {
+  return $current === $target ? 'top-nav-pill active' : 'top-nav-pill';
+}
 ?>
 <style>
 .top-nav-wrapper {
@@ -42,8 +47,8 @@
 </style>
 
 <div class="top-nav-wrapper">
-  <a class="top-nav-pill active" href="list_leads.php"><span class="icon">📈</span> Leads</a>
-  <a class="top-nav-pill" href="clients.php"><span class="icon">👥</span> Clients</a>
-  <a class="top-nav-pill" href="source_of_leads.php"><span class="icon">📂</span> Source of Leads</a>
-  <a class="top-nav-pill" href="looking_for.php"><span class="icon">🔎</span> Looking For</a>
+  <a class="<?php echo nav_class('leads.php', $current); ?>" href="leads.php"><span class="icon">📈</span> Leads</a>
+  <a class="<?php echo nav_class('clients.php', $current); ?>" href="clients.php"><span class="icon">👥</span> Clients</a>
+  <a class="<?php echo nav_class('sources.php', $current); ?>" href="sources.php"><span class="icon">📂</span> Source of Leads</a>
+  <a class="<?php echo nav_class('looking_for.php', $current); ?>" href="looking_for.php"><span class="icon">🔎</span> Looking For</a>
 </div>

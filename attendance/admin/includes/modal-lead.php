@@ -4,8 +4,6 @@
 <style>
 /* Backdrop blur for modern browsers */
 .modal-backdrop.show {
-  /* stronger backdrop: ~80% opacity with heavier blur */
-  /* visible but strongly blurred backdrop */
   background-color: rgba(255,255,255,0.06) !important;
   backdrop-filter: blur(40px) saturate(1.08);
   -webkit-backdrop-filter: blur(40px) saturate(1.08);
@@ -15,49 +13,22 @@
 }
 .modal {
   z-index: 4000 !important;
+  display: none !important;
+  position: fixed !important;
+  inset: 0 !important;
 }
+.modal.show { display: block !important; }
 .modal-content.lead-modal {
   border-radius: 12px;
   box-shadow: 0 8px 24px rgba(0,0,0,0.12);
   display: flex;
   flex-direction: column;
-  overflow: hidden; /* ensure internal scrolling happens inside .modal-body */
+  overflow: hidden;
 }
-.modal-dialog {
-  /* small top offset so fixed header doesn't visually cut rounded corners on some browsers */
-  margin-top: 8vh;
-}
+.modal-dialog { margin-top: 8vh; }
 .lead-modal .form-label { font-weight: 600; }
 .input-add-btn { cursor:pointer; font-size:1.05rem; }
-/* Fallback blur for browsers that don't support backdrop-filter */
-.main-content-scroll.lead-modal-blur {
-  /* fallback: blur main content strongly rather than hide it */
-  -webkit-filter: blur(40px) brightness(.88) contrast(.96);
-  filter: blur(40px) brightness(.88) contrast(.96);
-  transition: filter .18s ease, opacity .18s ease;
-  opacity: 1;
-}
-
-/* When modal open, hide page scrollbars and prevent layout shift */
-html.lead-disable-scroll,
-body.lead-disable-scroll {
-  overflow: hidden !important;
-  height: 100% !important;
-}
-</style>
-
-<style>
-/* Make modal body scrollable internally so scrollbar appears inside modal */
-.lead-modal .modal-body {
-  overflow: auto;
-  -webkit-overflow-scrolling: touch;
-  flex: 1 1 auto;
-}
-.lead-modal .modal-header,
-.lead-modal .modal-footer {
-  flex: 0 0 auto;
-}
-</style>
+.lead-modal .modal-body { overflow: auto; -webkit-overflow-scrolling: touch; flex: 1 1 auto; }
 </style>
 
 <div class="modal fade" id="leadModal" tabindex="-1" aria-hidden="true">
@@ -79,6 +50,7 @@ body.lead-disable-scroll {
               <label class="form-label">Contact Number</label>
               <input name="contact_number" id="leadContact" class="form-control">
             </div>
+
             <div class="col-12 col-md-6">
               <label class="form-label">Email</label>
               <input name="email" id="leadEmail" type="email" class="form-control">
@@ -91,6 +63,7 @@ body.lead-disable-scroll {
                 <option value="">-- Select source --</option>
               </select>
             </div>
+
             <div class="col-12 col-md-6">
               <label class="form-label d-flex justify-content-between align-items-center">Looking For
                 <span class="input-add-btn text-primary" id="addLookingForBtn" title="Add">➕</span>
@@ -105,6 +78,47 @@ body.lead-disable-scroll {
               <label class="form-label">Sales Person</label>
               <input name="sales_person" id="leadSalesPerson" class="form-control">
             </div>
+
+            <div class="col-12 col-md-6">
+              <label class="form-label">Profile</label>
+              <select name="profile" id="leadProfile" class="form-select">
+                <option value="">-- Select profile --</option>
+                <option value="business">Business</option>
+                <option value="salaried">Salaried</option>
+              </select>
+            </div>
+            <div class="col-12 col-md-6">
+              <label class="form-label">Purpose</label>
+              <input name="purpose" id="leadPurpose" class="form-control">
+            </div>
+
+            <div class="col-12 col-md-3">
+              <label class="form-label">Pincode</label>
+              <input name="pincode" id="leadPincode" class="form-control">
+            </div>
+            <div class="col-12 col-md-3">
+              <label class="form-label">City</label>
+              <input name="city" id="leadCity" class="form-control">
+            </div>
+            <div class="col-12 col-md-3">
+              <label class="form-label">State</label>
+              <input name="state" id="leadState" class="form-control">
+            </div>
+            <div class="col-12 col-md-3">
+              <label class="form-label">Country</label>
+              <input name="country" id="leadCountry" class="form-control">
+            </div>
+
+            <div class="col-12 col-md-6">
+              <label class="form-label">Status</label>
+              <select name="lead_status" id="leadStatus" class="form-select">
+                <option value="">-- Select status --</option>
+                <option value="hot">Hot</option>
+                <option value="cold">Cold</option>
+                <option value="warm">Warm</option>
+              </select>
+            </div>
+
             <div class="col-12">
               <label class="form-label">Notes</label>
               <textarea name="notes" id="leadNotes" class="form-control" rows="3"></textarea>
@@ -123,96 +137,71 @@ body.lead-disable-scroll {
 <script>
 // Initialize modal behaviors and small helpers (reusable)
 (function(){
-  // When Add Looking For clicked, prompt and append option
   document.addEventListener('click', function(e){
     if (e.target && e.target.id === 'addLookingForBtn'){
-      var v = prompt('Add new Looking For label');
-      if (!v) return;
-      var sel = document.getElementById('leadLookingForId');
-      var opt = document.createElement('option');
-      opt.value = 'new:' + Date.now(); // temporary client id; server must map real id
-      opt.text = v;
-      opt.selected = true;
-      sel.appendChild(opt);
+      var v = prompt('Add new Looking For label'); if (!v) return;
+      var sel = document.getElementById('leadLookingForId'); var opt = document.createElement('option');
+      opt.value = 'new:' + Date.now(); opt.text = v; opt.selected = true; sel.appendChild(opt);
     }
   });
 
-  // Make sure modal is focus-friendly on small screens (Bootstrap handles most)
   var leadModalEl = document.getElementById('leadModal');
   if (leadModalEl){
     leadModalEl.addEventListener('shown.bs.modal', function(){
       var c = document.querySelector('.main-content-scroll'); if (c) c.classList.add('lead-modal-blur');
-      // lock scroll by fixing body position and preserving scroll position (works in Chrome)
       try{
-        var scrollY = window.scrollY || window.pageYOffset || 0;
-        leadModalEl.dataset._prevScrollY = scrollY;
-        // save previous inline styles to restore later
+        var scrollY = window.scrollY || window.pageYOffset || 0; leadModalEl.dataset._prevScrollY = scrollY;
         leadModalEl.dataset._prevBodyPosition = document.body.style.position || '';
         leadModalEl.dataset._prevBodyTop = document.body.style.top || '';
         leadModalEl.dataset._prevBodyLeft = document.body.style.left || '';
         leadModalEl.dataset._prevBodyRight = document.body.style.right || '';
         leadModalEl.dataset._prevBodyWidth = document.body.style.width || '';
-
-        document.body.style.position = 'fixed';
-        document.body.style.top = '-' + scrollY + 'px';
-        document.body.style.left = '0';
-        document.body.style.right = '0';
-        document.body.style.width = '100%';
-
-        // compute scrollbar width and add compensation padding to avoid layout shift
-        var sbw = window.innerWidth - document.documentElement.clientWidth;
-        if (sbw > 0){
-          leadModalEl.dataset._prevBodyPr = document.body.style.paddingRight || '';
-          var prevPr = parseFloat(getComputedStyle(document.body).paddingRight) || 0;
-          document.body.style.paddingRight = (prevPr + sbw) + 'px';
-        }
-
-        // hide overflow on any .main-content-scroll containers and save previous
-        var scs = document.querySelectorAll('.main-content-scroll');
-        scs.forEach(function(el){ el.dataset._prevOverflow = el.style.overflow || ''; el.style.overflow = 'hidden'; });
+        document.body.style.position = 'fixed'; document.body.style.top = '-' + scrollY + 'px';
+        document.body.style.left = '0'; document.body.style.right = '0'; document.body.style.width = '100%';
+        var sbw = window.innerWidth - document.documentElement.clientWidth; if (sbw > 0){ leadModalEl.dataset._prevBodyPr = document.body.style.paddingRight || ''; var prevPr = parseFloat(getComputedStyle(document.body).paddingRight) || 0; document.body.style.paddingRight = (prevPr + sbw) + 'px'; }
+        var scs = document.querySelectorAll('.main-content-scroll'); scs.forEach(function(el){ el.dataset._prevOverflow = el.style.overflow || ''; el.style.overflow = 'hidden'; });
       }catch(e){}
       var nm = document.getElementById('leadName'); if (nm) nm.focus();
+      // fetch active lead sources so dropdown stays up-to-date
+      try{
+        <?php
+        // Build an admin-root relative path to the leads endpoint so the modal works
+        $script = $_SERVER['SCRIPT_NAME'] ?? '';
+        $adminPos = strpos($script, '/admin');
+        $adminBase = $adminPos !== false ? substr($script, 0, $adminPos + 6) : '';
+        $getSourcesUrl = $adminBase . '/leads/get_sources.php';
+        ?>
+        fetch('<?php echo $getSourcesUrl; ?>').then(r=>r.json()).then(j=>{ if (j && Array.isArray(j.sources)) populateLeadSelects({ sources: j.sources }); }).catch(()=>{});
+      }catch(e){}
     });
     leadModalEl.addEventListener('hidden.bs.modal', function(){
       var c = document.querySelector('.main-content-scroll'); if (c) c.classList.remove('lead-modal-blur');
       try{
-        // restore body position and scroll
-        if (leadModalEl.dataset._prevScrollY !== undefined){
-          var prevY = parseInt(leadModalEl.dataset._prevScrollY,10) || 0;
-          document.body.style.position = leadModalEl.dataset._prevBodyPosition || '';
-          document.body.style.top = leadModalEl.dataset._prevBodyTop || '';
-          document.body.style.left = leadModalEl.dataset._prevBodyLeft || '';
-          document.body.style.right = leadModalEl.dataset._prevBodyRight || '';
-          document.body.style.width = leadModalEl.dataset._prevBodyWidth || '';
-          window.scrollTo(0, prevY);
-          delete leadModalEl.dataset._prevScrollY;
-          delete leadModalEl.dataset._prevBodyPosition; delete leadModalEl.dataset._prevBodyTop; delete leadModalEl.dataset._prevBodyLeft; delete leadModalEl.dataset._prevBodyRight; delete leadModalEl.dataset._prevBodyWidth;
-        }
-        // restore padding if we added compensation
+        if (leadModalEl.dataset._prevScrollY !== undefined){ var prevY = parseInt(leadModalEl.dataset._prevScrollY,10) || 0; document.body.style.position = leadModalEl.dataset._prevBodyPosition || ''; document.body.style.top = leadModalEl.dataset._prevBodyTop || ''; document.body.style.left = leadModalEl.dataset._prevBodyLeft || ''; document.body.style.right = leadModalEl.dataset._prevBodyRight || ''; document.body.style.width = leadModalEl.dataset._prevBodyWidth || ''; window.scrollTo(0, prevY); delete leadModalEl.dataset._prevScrollY; delete leadModalEl.dataset._prevBodyPosition; delete leadModalEl.dataset._prevBodyTop; delete leadModalEl.dataset._prevBodyLeft; delete leadModalEl.dataset._prevBodyRight; delete leadModalEl.dataset._prevBodyWidth; }
         if (leadModalEl.dataset._prevBodyPr !== undefined){ document.body.style.paddingRight = leadModalEl.dataset._prevBodyPr || ''; delete leadModalEl.dataset._prevBodyPr; }
-        // restore any .main-content-scroll containers
-        var scs = document.querySelectorAll('.main-content-scroll');
-        scs.forEach(function(el){ if (el.dataset._prevOverflow !== undefined){ el.style.overflow = el.dataset._prevOverflow || ''; delete el.dataset._prevOverflow; } });
+        var scs = document.querySelectorAll('.main-content-scroll'); scs.forEach(function(el){ if (el.dataset._prevOverflow !== undefined){ el.style.overflow = el.dataset._prevOverflow || ''; delete el.dataset._prevOverflow; } });
       }catch(e){}
     });
   }
 
-  // Optional: function to populate selects (callable from page if desired)
-  window.populateLeadSelects = function(data){
-    // data: { sources: [{id,name}], lookings: [{id,name}] }
-    if (data && data.sources){
-      var s = document.getElementById('leadSourceId'); if (s){ s.innerHTML = '<option value="">-- Select source --</option>'; data.sources.forEach(function(r){ var o = document.createElement('option'); o.value = r.id; o.text = r.name; s.appendChild(o); }); }
-    }
-    if (data && data.lookings){
-      var l = document.getElementById('leadLookingForId'); if (l){ l.innerHTML = '<option value="">-- Select --</option>'; data.lookings.forEach(function(r){ var o = document.createElement('option'); o.value = r.id; o.text = r.name; l.appendChild(o); }); }
-    }
-  };
+  window.populateLeadSelects = function(data){ if (data && data.sources){ var s = document.getElementById('leadSourceId'); if (s){ s.innerHTML = '<option value="">-- Select source --</option>'; data.sources.forEach(function(r){ var o = document.createElement('option'); o.value = r.id; o.text = r.name; s.appendChild(o); }); } } if (data && data.lookings){ var l = document.getElementById('leadLookingForId'); if (l){ l.innerHTML = '<option value="">-- Select --</option>'; data.lookings.forEach(function(r){ var o = document.createElement('option'); o.value = r.id; o.text = r.name; l.appendChild(o); }); } } };
 
-  // Optional helper to reset the form (used by pages)
-  window.resetLeadForm = function(){
-    var f = document.getElementById('leadForm'); if (f) f.reset();
-    var id = document.getElementById('leadId'); if (id) id.value = '';
-  };
+  window.resetLeadForm = function(){ var f = document.getElementById('leadForm'); if (f) f.reset(); var id = document.getElementById('leadId'); if (id) id.value = ''; };
 
+})();
+</script>
+
+<script>
+// Auto-fill city/state/country when a 6-digit Indian pincode is entered
+(function(){
+  const pincodeEl = document.getElementById('leadPincode');
+  const cityEl = document.getElementById('leadCity');
+  const stateEl = document.getElementById('leadState');
+  const countryEl = document.getElementById('leadCountry');
+  if (!pincodeEl) return;
+  let debounceTimer = null;
+  pincodeEl.addEventListener('input', function(){ clearTimeout(debounceTimer); const digits = this.value.replace(/\D/g,''); if (digits.length !== 6) return; debounceTimer = setTimeout(()=> lookupPincode(digits), 400); });
+  pincodeEl.addEventListener('blur', function(){ const digits = this.value.replace(/\D/g,''); if (digits.length === 6) lookupPincode(digits); });
+  function lookupPincode(pin){ if (!pin || pin.length !== 6) return; fetch('https://api.postalpincode.in/pincode/' + encodeURIComponent(pin)).then(r=>r.json()).then(j=>{ if (!Array.isArray(j) || j.length===0) return; const res = j[0]; if (!res || res.Status!=='Success' || !Array.isArray(res.PostOffice) || res.PostOffice.length===0) return; const po = res.PostOffice[0]||{}; if (cityEl) cityEl.value = po.District || po.Name || ''; if (stateEl) stateEl.value = po.State || ''; if (countryEl) countryEl.value = po.Country || 'India'; }).catch(()=>{}); }
 })();
 </script>

@@ -1,17 +1,23 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-	<meta charset="utf-8">
-	<meta name="viewport" content="width=device-width, initial-scale=1">
-	<title>Leads</title>
-	<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-<!DOCTYPE html>
-<html lang="en">
-<head>
 		<meta charset="utf-8">
 		<meta name="viewport" content="width=device-width, initial-scale=1">
 		<title>Leads</title>
 		<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+		<style>
+			body {
+				background: #f3f5fb;
+				font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+			}
+			.section-title {
+				font-size: 1.8rem;
+				font-weight: 700;
+				letter-spacing: 0.02em;
+			}
+			.card-main { border-radius: 8px; box-shadow: 0 4px 14px rgba(15,23,42,0.06); overflow: hidden; }
+			.card-main-header { background: #ffffff; }
+		</style>
 </head>
 <body>
 
@@ -47,7 +53,8 @@
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script>
 	const leadModalEl = document.getElementById('leadModal');
-	const leadModal = new bootstrap.Modal(leadModalEl);
+	let leadModal = null;
+	try{ if (leadModalEl) leadModal = new bootstrap.Modal(leadModalEl); }catch(e){ console.error('Modal init failed', e); }
 
 	function loadLeads(){
 		fetch('leads_list_fragment.php')
@@ -56,33 +63,84 @@
 	}
 
 	function initLeadHandlers(){
-		document.querySelectorAll('.btn-edit-lead').forEach(btn=>{
-			btn.addEventListener('click', function(){
-				const tr = this.closest('tr');
-				const id = tr.dataset.id;
+		// helper to open edit modal for a given lead id
+		function openEditLead(id){
 				if (!id) return;
 				fetch('get_lead.php?id='+encodeURIComponent(id)).then(r=>r.json()).then(j=>{
-					if (!j.success){ alert(j.message||'Failed to load'); return; }
-					const d = j.data;
-					document.getElementById('leadId').value = d.id || '';
-					document.getElementById('leadName').value = d.name || '';
-					document.getElementById('leadContact').value = d.contact_number || '';
-					document.getElementById('leadEmail').value = d.email || '';
-					document.getElementById('leadLookingForId').value = d.looking_for_id || '';
-					document.getElementById('leadSourceId').value = d.lead_source_id || '';
-					document.getElementById('leadSalesPerson').value = d.sales_person || '';
-					document.getElementById('leadProfile').value = d.profile || '';
-					document.getElementById('leadPincode').value = d.pincode || '';
-					document.getElementById('leadCity').value = d.city || '';
-					document.getElementById('leadState').value = d.state || '';
-					document.getElementById('leadCountry').value = d.country || '';
-					document.getElementById('leadReference').value = d.reference || '';
-					document.getElementById('leadPurpose').value = d.purpose || '';
-					document.getElementById('leadStatus').value = d.lead_status || '';
-					document.getElementById('leadNotes').value = d.notes || '';
-					leadModal.show();
-				});
+						if (!j.success){ alert(j.message||'Failed to load'); return; }
+						const d = j.data || {};
+						const setIf = (id, val)=>{ const el = document.getElementById(id); if (!el) return; el.value = val === undefined || val === null ? '' : val; };
+						fetch('get_sources.php').then(r=>r.json()).then(sdata=>{
+								try{ if (sdata && Array.isArray(sdata.sources)) populateLeadSelects({ sources: sdata.sources }); }catch(e){}
+								// populate fields
+								setIf('leadId', d.id ?? '');
+								setIf('leadName', d.name ?? '');
+								setIf('leadContact', d.contact_number ?? '');
+								setIf('leadEmail', d.email ?? '');
+								setIf('leadLookingForId', d.looking_for_id ?? '');
+								(function(){
+									var srcSel = document.getElementById('leadSourceId');
+									var srcVal = d.lead_source_id ?? '';
+									if (srcSel){
+										var opt = srcSel.querySelector('option[value="'+srcVal+'"]');
+										if (opt){ srcSel.value = srcVal; }
+										else if (srcVal && d.lead_source_name){
+											var o = document.createElement('option'); o.value = srcVal; o.text = d.lead_source_name; o.selected = true; srcSel.appendChild(o);
+										} else { srcSel.value = srcVal || ''; }
+										srcSel.dispatchEvent(new Event('change'));
+									}
+								})();
+								setIf('leadSalesPerson', d.sales_person ?? '');
+								setIf('leadProfile', d.profile ?? '');
+								setIf('leadPincode', d.pincode ?? '');
+								setIf('leadCity', d.city ?? '');
+								setIf('leadState', d.state ?? '');
+								setIf('leadCountry', d.country ?? '');
+								setIf('leadReference', d.reference ?? '');
+								setIf('leadPurpose', d.purpose ?? '');
+								(function(){
+									var st = (d.lead_status || '').toString().toLowerCase();
+									if (st === 'h' || st === 'hot') st = 'hot';
+									else if (st === 'c' || st === 'cold') st = 'cold';
+									else if (st === 'w' || st === 'warm' || st === 'warn') st = 'warm';
+									var stEl = document.getElementById('leadStatus'); if (stEl){ stEl.value = st; stEl.dispatchEvent(new Event('change')); }
+								})();
+								setIf('leadNotes', d.notes ?? '');
+								if (leadModal) leadModal.show();
+						}).catch(()=>{
+								// fallback: populate anyway
+								setIf('leadId', d.id ?? '');
+								setIf('leadName', d.name ?? '');
+								setIf('leadContact', d.contact_number ?? '');
+								setIf('leadEmail', d.email ?? '');
+								setIf('leadLookingForId', d.looking_for_id ?? '');
+								setIf('leadSourceId', d.lead_source_id ?? '');
+								setIf('leadSalesPerson', d.sales_person ?? '');
+								setIf('leadProfile', d.profile ?? '');
+								setIf('leadPincode', d.pincode ?? '');
+								setIf('leadCity', d.city ?? '');
+								setIf('leadState', d.state ?? '');
+								setIf('leadCountry', d.country ?? '');
+								setIf('leadReference', d.reference ?? '');
+								setIf('leadPurpose', d.purpose ?? '');
+								setIf('leadStatus', d.lead_status ?? '');
+								setIf('leadNotes', d.notes ?? '');
+								if (leadModal) leadModal.show();
+						});
+				}).catch(err=>{ console.error('Failed to fetch lead', err); alert('Failed to load lead data'); });
+		}
+
+		// attach click handlers (existing buttons)
+		document.querySelectorAll('.btn-edit-lead').forEach(btn=> btn.addEventListener('click', function(){ const tr = this.closest('tr'); const id = tr ? tr.dataset.id : (this.dataset && this.dataset.leadId ? this.dataset.leadId : null); if (id) openEditLead(id); }));
+
+		// delegated handler for dynamically added rows or if direct handlers fail
+		var leadsListEl = document.getElementById('leadsList');
+		if (leadsListEl){
+			leadsListEl.addEventListener('click', function(e){
+				var btn = e.target.closest && e.target.closest('.btn-edit-lead');
+				if (btn){ var tr = btn.closest('tr'); var id = tr ? tr.dataset.id : (btn.dataset && btn.dataset.leadId ? btn.dataset.leadId : null); if (id) openEditLead(id); }
 			});
+		}
 		});
 
 		document.querySelectorAll('.btn-delete-lead').forEach(btn=>{
