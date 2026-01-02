@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1:3306
--- Generation Time: Dec 29, 2025 at 01:47 PM
+-- Generation Time: Jan 02, 2026 at 01:51 PM
 -- Server version: 8.4.7
 -- PHP Version: 8.3.28
 
@@ -310,7 +310,7 @@ CREATE TABLE IF NOT EXISTS `leads` (
 --
 
 INSERT INTO `leads` (`id`, `name`, `contact_number`, `email`, `looking_for_id`, `lead_source_id`, `sales_person`, `profile`, `pincode`, `city`, `state`, `country`, `reference`, `purpose`, `lead_status`, `notes`, `created_at`, `updated_at`) VALUES
-(1, 'Sachin Mandal', '6352816306', '', 0, 0, '', '', '', '', '', '', '', '', '', '', '2025-12-29 18:28:08', '2025-12-29 18:28:08');
+(1, 'Sachin Mandal', '6352816306', 'sachin.balarbuilders@gmail.com', 0, 0, '', 'business', '396105', 'Valsad', 'Gujarat', 'India', '', 'Stay', '', 'asa', '2025-12-29 18:28:08', '2025-12-30 18:05:17');
 
 -- --------------------------------------------------------
 
@@ -321,13 +321,22 @@ INSERT INTO `leads` (`id`, `name`, `contact_number`, `email`, `looking_for_id`, 
 DROP TABLE IF EXISTS `lead_sources`;
 CREATE TABLE IF NOT EXISTS `lead_sources` (
   `id` int NOT NULL AUTO_INCREMENT,
-  `title` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `name` varchar(191) COLLATE utf8mb4_unicode_ci NOT NULL,
   `description` text COLLATE utf8mb4_unicode_ci,
   `status` tinyint(1) DEFAULT '1',
   `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
   `updated_at` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`)
-) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  PRIMARY KEY (`id`),
+  KEY `idx_lead_sources_name` (`name`)
+) ENGINE=MyISAM AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+--
+-- Dumping data for table `lead_sources`
+--
+
+INSERT INTO `lead_sources` (`id`, `name`, `description`, `status`, `created_at`, `updated_at`) VALUES
+(2, 'D', 'ok', 0, '2025-12-30 16:37:09', '2025-12-30 16:56:26'),
+(3, 'hh', '', 1, '2025-12-30 16:56:11', '2025-12-30 16:56:11');
 
 -- --------------------------------------------------------
 
