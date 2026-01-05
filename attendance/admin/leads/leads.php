@@ -33,12 +33,19 @@
 	</div>
 	<div class="card card-main">
 		<div class="card-header card-main-header d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2">
-			<div class="d-flex align-items-center gap-3 w-100">
-				<div class="w-100" style="max-width:360px;">
-					<input type="search" id="leadSearch" class="form-control form-control-sm" placeholder="Search leads...">
-				</div>
-				<small class="text-muted ms-2">Total: <span id="leadsCount"></span></small>
-			</div>
+				    <div class="d-flex align-items-center gap-3 w-100">
+					<div class="w-100" style="max-width:360px;">
+						<input type="search" id="leadSearch" class="form-control form-control-sm" placeholder="Search leads...">
+					</div>
+					<select id="leadStatusFilter" class="form-select form-select-sm" style="max-width:150px;">
+					  <option value="">All Status</option>
+					  <option value="hot">Hot</option>
+					  <option value="warm">Warm</option>
+					  <option value="cold">Cold</option>
+					</select>
+					<select id="leadSalesFilter" class="form-select form-select-sm" style="max-width:200px;"></select>
+					<small class="text-muted ms-2">Total: <span id="leadsCount"></span></small>
+				    </div>
 		</div>
 		<div class="card-body p-0">
 			<div id="leadsList">
@@ -54,41 +61,109 @@
 <script>
 	const leadModalEl = document.getElementById('leadModal');
 	let leadModal = null;
-	try{ if (leadModalEl) leadModal = new bootstrap.Modal(leadModalEl); }catch(e){ console.error('Modal init failed', e); }
+	try{ if (leadModalEl) leadModal = new bootstrap.Modal(leadModalEl); }catch(e){}
 
-	function loadLeads(){
-		fetch('leads_list_fragment.php')
-			.then(r=>r.text())
-			.then(html=>{ document.getElementById('leadsList').innerHTML = html; initLeadHandlers(); if (typeof filterLeads === 'function') filterLeads(); });
+	let currentLeadsPage = 1;
+	let currentLeadsPerPage = 10;
+	function getLeadsPerPage(){ return currentLeadsPerPage; }
+
+	function loadLeads(page = 1){
+		currentLeadsPage = page || 1;
+		var per = getLeadsPerPage();
+		var q = document.getElementById('leadSearch') ? document.getElementById('leadSearch').value.trim() : '';
+		var status = document.getElementById('leadStatusFilter') ? document.getElementById('leadStatusFilter').value : '';
+		var sales = document.getElementById('leadSalesFilter') ? document.getElementById('leadSalesFilter').value : '';
+		var url = 'leads_list_fragment.php?page='+encodeURIComponent(currentLeadsPage)+'&per_page='+encodeURIComponent(per);
+		if (q) url += '&q='+encodeURIComponent(q);
+		if (status) url += '&lead_status='+encodeURIComponent(status);
+		if (sales) url += '&sales_person='+encodeURIComponent(sales);
+		fetch(url).then(r=>r.text()).then(html=>{
+			var m = html.match(/<!--LEADS_TOTAL:(\d+)-->/);
+			if (m && m[1]){ var el = document.getElementById('leadsCount'); if (el) el.innerText = m[1]; }
+			document.getElementById('leadsList').innerHTML = html.replace(/<!--LEADS_TOTAL:\d+-->/, '');
+				// sync footer per-page select with current value and wire change handler
+				var footerSel = document.getElementById('leadPerPageFooter'); if (footerSel) { footerSel.value = currentLeadsPerPage; footerSel.onchange = function(){ currentLeadsPerPage = parseInt(this.value,10)||10; loadLeads(1); }; }
+				initLeadHandlers(); attachPaginationHandlers();
+		});
 	}
+
+	function attachPaginationHandlers(){
+		document.querySelectorAll('.leads-page-link').forEach(function(a){
+			a.addEventListener('click', function(e){ e.preventDefault(); var p = parseInt(this.dataset.page,10)||1; loadLeads(p); });
+		});
+	}
+
+
 
 	function initLeadHandlers(){
 		// helper to open edit modal for a given lead id
 		function openEditLead(id){
-				if (!id) return;
-				fetch('get_lead.php?id='+encodeURIComponent(id)).then(r=>r.json()).then(j=>{
+			var idStr = (id === undefined || id === null) ? '' : String(id).trim();
+			var idNum = parseInt(idStr, 10) || 0;
+			if (!idStr || idNum <= 0){ return; }
+			fetch('get_lead.php?id='+encodeURIComponent(idNum)).then(r=>r.json()).then(j=>{
 						if (!j.success){ alert(j.message||'Failed to load'); return; }
 						const d = j.data || {};
 						const setIf = (id, val)=>{ const el = document.getElementById(id); if (!el) return; el.value = val === undefined || val === null ? '' : val; };
 						fetch('get_sources.php').then(r=>r.json()).then(sdata=>{
-								try{ if (sdata && Array.isArray(sdata.sources)) populateLeadSelects({ sources: sdata.sources }); }catch(e){}
+										try{
+															if (sdata && Array.isArray(sdata.sources)) populateLeadSelects({ sources: sdata.sources });
+															// if lead has no source assigned but there is exactly one active source, auto-select it
+															if ((d.lead_source_id === 0 || d.lead_source_id === null || d.lead_source_id === '' || d.lead_source_id === undefined) && Array.isArray(sdata.sources) && sdata.sources.length === 1){
+																d.lead_source_id = sdata.sources[0].id;
+																d.lead_source_name = sdata.sources[0].name || d.lead_source_name;
+															}
+										}catch(e){ }
 								// populate fields
 								setIf('leadId', d.id ?? '');
 								setIf('leadName', d.name ?? '');
 								setIf('leadContact', d.contact_number ?? '');
 								setIf('leadEmail', d.email ?? '');
 								setIf('leadLookingForId', d.looking_for_id ?? '');
+								var lfEl = document.getElementById('leadLookingForId'); if (lfEl) lfEl.dispatchEvent(new Event('change'));
+								// set saved LF type and subtype ids (if present)
+								setIf('leadLookingForTypeId', d.looking_for_type_id ?? '');
+								var hiddenSub = document.getElementById('leadLookingForSubtypeIds'); if (hiddenSub) hiddenSub.value = d.looking_for_subtypes ?? '';
 								(function(){
 									var srcSel = document.getElementById('leadSourceId');
 									var srcVal = d.lead_source_id ?? '';
-									if (srcSel){
-										var opt = srcSel.querySelector('option[value="'+srcVal+'"]');
-										if (opt){ srcSel.value = srcVal; }
-										else if (srcVal && d.lead_source_name){
-											var o = document.createElement('option'); o.value = srcVal; o.text = d.lead_source_name; o.selected = true; srcSel.appendChild(o);
-										} else { srcSel.value = srcVal || ''; }
-										srcSel.dispatchEvent(new Event('change'));
+									srcVal = srcVal === null || srcVal === undefined ? '' : String(srcVal);
+                                    
+									var attempts = 0;
+									function trySetSource(){
+										attempts++;
+										if (!srcSel) srcSel = document.getElementById('leadSourceId');
+										if (srcSel){
+											var opt = srcSel.querySelector('option[value="'+srcVal+'"]');
+											if (opt){
+												srcSel.value = srcVal;
+												srcSel.dispatchEvent(new Event('change'));
+												return true;
+											}
+											// try match by option text (name) in case value types or ids differ
+											var match = Array.from(srcSel.options).find(function(o){ return (o.text||'').toString().trim().toLowerCase() === (d.lead_source_name||'').toString().trim().toLowerCase(); });
+											if (match){
+												srcSel.value = match.value;
+												srcSel.dispatchEvent(new Event('change'));
+												return true;
+											}
+											if (srcVal && d.lead_source_name){
+												var o = document.createElement('option'); o.value = srcVal; o.text = d.lead_source_name; o.selected = true; srcSel.appendChild(o);
+												srcSel.dispatchEvent(new Event('change'));
+												return true;
+											}
+											if (srcVal === ''){
+												srcSel.value = '';
+												srcSel.dispatchEvent(new Event('change'));
+												return true;
+											}
+										}
+										if (attempts < 6){
+											setTimeout(trySetSource, 120);
+										} else {
+										}
 									}
+									trySetSource();
 								})();
 								setIf('leadSalesPerson', d.sales_person ?? '');
 								setIf('leadProfile', d.profile ?? '');
@@ -103,7 +178,8 @@
 									if (st === 'h' || st === 'hot') st = 'hot';
 									else if (st === 'c' || st === 'cold') st = 'cold';
 									else if (st === 'w' || st === 'warm' || st === 'warn') st = 'warm';
-									var stEl = document.getElementById('leadStatus'); if (stEl){ stEl.value = st; stEl.dispatchEvent(new Event('change')); }
+									var stEl = document.getElementById('leadStatus');
+									if (stEl){ stEl.value = st; stEl.dispatchEvent(new Event('change')); }
 								})();
 								setIf('leadNotes', d.notes ?? '');
 								if (leadModal) leadModal.show();
@@ -127,21 +203,20 @@
 								setIf('leadNotes', d.notes ?? '');
 								if (leadModal) leadModal.show();
 						});
-				}).catch(err=>{ console.error('Failed to fetch lead', err); alert('Failed to load lead data'); });
+				}).catch(err=>{ alert('Failed to load lead data'); });
 		}
 
 		// attach click handlers (existing buttons)
-		document.querySelectorAll('.btn-edit-lead').forEach(btn=> btn.addEventListener('click', function(){ const tr = this.closest('tr'); const id = tr ? tr.dataset.id : (this.dataset && this.dataset.leadId ? this.dataset.leadId : null); if (id) openEditLead(id); }));
+		document.querySelectorAll('.btn-edit-lead').forEach(btn=> btn.addEventListener('click', function(){ const tr = this.closest('tr'); const id = tr && tr.dataset && tr.dataset.id ? tr.dataset.id : (this.dataset && this.dataset.leadId ? this.dataset.leadId : null); if (id) openEditLead(id); }));
 
 		// delegated handler for dynamically added rows or if direct handlers fail
 		var leadsListEl = document.getElementById('leadsList');
 		if (leadsListEl){
 			leadsListEl.addEventListener('click', function(e){
 				var btn = e.target.closest && e.target.closest('.btn-edit-lead');
-				if (btn){ var tr = btn.closest('tr'); var id = tr ? tr.dataset.id : (btn.dataset && btn.dataset.leadId ? btn.dataset.leadId : null); if (id) openEditLead(id); }
+				if (btn){ var tr = btn.closest('tr'); var id = tr && tr.dataset && tr.dataset.id ? tr.dataset.id : (btn.dataset && btn.dataset.leadId ? btn.dataset.leadId : null); if (id) openEditLead(id); }
 			});
 		}
-		});
 
 		document.querySelectorAll('.btn-delete-lead').forEach(btn=>{
 			btn.addEventListener('click', function(){
@@ -174,27 +249,25 @@
 
 	// init on page load
 	document.addEventListener('DOMContentLoaded', ()=>{ initLeadHandlers(); });
+	// no inline sales filter — moved to navbar
   
-	// search filter for leads table
-	function filterLeads(){
-		var input = document.getElementById('leadSearch');
-		var filter = input ? input.value.toLowerCase().trim() : '';
-		var tbody = document.querySelector('#leadsTable tbody');
-		if (!tbody) return;
-		var rows = tbody.getElementsByTagName('tr');
-		var any = 0;
-		for (var i=0;i<rows.length;i++){
-			var r = rows[i];
-			var text = r.innerText.toLowerCase();
-			if (filter === '' || text.indexOf(filter) !== -1){ r.style.display = ''; any++; }
-			else { r.style.display = 'none'; }
-		}
-		document.getElementById('leadsCount').innerText = any;
-	}
+	// wire search and filters to server-side load
 	var leadSearchEl = document.getElementById('leadSearch');
-	if (leadSearchEl){ leadSearchEl.addEventListener('input', filterLeads); }
-	// update count initially
-	setTimeout(filterLeads, 200);
+	if (leadSearchEl){
+		var debounce;
+		leadSearchEl.addEventListener('input', function(){ clearTimeout(debounce); debounce = setTimeout(function(){ loadLeads(1); }, 300); });
+	}
+	var leadStatusFilterEl = document.getElementById('leadStatusFilter'); if (leadStatusFilterEl) leadStatusFilterEl.addEventListener('change', function(){ loadLeads(1); });
+	var leadSalesFilterEl = document.getElementById('leadSalesFilter'); if (leadSalesFilterEl) leadSalesFilterEl.addEventListener('change', function(){ loadLeads(1); });
+	// header per-page removed; footer-only control is handled in loadLeads
+
+	// populate sales person filter with all sales persons (first page large)
+	(function(){ fetch('get_sales_persons.php?page=1&per_page=1000').then(r=>r.json()).then(j=>{ if (j && Array.isArray(j.sales)){ var sel = document.getElementById('leadSalesFilter'); if (!sel) return; var opt = document.createElement('option'); opt.value=''; opt.text='All Sales'; sel.appendChild(opt); j.sales.forEach(function(s){ var o = document.createElement('option'); o.value = s.name || s.employee_id || s.id; o.text = s.name || ('#'+s.employee_id); sel.appendChild(o); }); } }); })();
+
+	// header per-page removed; footer-only control is used
+
+	// initial load
+	document.addEventListener('DOMContentLoaded', ()=>{ initLeadHandlers(); loadLeads(1); });
 </script>
 
 </body>

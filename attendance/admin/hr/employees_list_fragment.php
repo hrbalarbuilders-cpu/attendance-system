@@ -18,7 +18,7 @@
     <div class="table-responsive">
       <table class="table table-hover align-middle mb-0">
         <thead id="employeeTableHead">
-          <tr class="text-nowrap">
+          <tr class="text-nowrap" data-id="<?php echo isset($row['id']) ? (int)$row['id'] : ''; ?>">
             <th>#</th>
             <th>Emp Code</th>
             <th>Name</th>

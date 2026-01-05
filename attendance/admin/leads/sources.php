@@ -23,18 +23,21 @@ include_once __DIR__ . '/../config/db.php';
   <?php include_once __DIR__ . '/../includes/navbar-sales.php'; ?>
 
   <div class="container py-4">
-    <div class="d-flex justify-content-between align-items-center mb-3">
-      <h4 class="section-title mb-0">Source of Leads</h4>
-      <button id="btnAddSource" class="btn btn-dark">+ Add Source</button>
-    </div>
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h4 class="section-title mb-0">Source of Leads</h4>
+        <button id="btnAddSource" class="btn btn-dark">+ Add Source</button>
+      </div>
 
-    <div class="card">
-      <div class="card-body p-0">
-        <div id="sourcesList">
-          <?php include __DIR__ . '/leads_source_list_fragment.php'; ?>
+      <div class="card">
+        <div class="card-header d-flex gap-2 align-items-center">
+          <input id="sourceSearch" class="form-control form-control-sm" placeholder="Search sources..." style="max-width:360px;">
+        </div>
+        <div class="card-body p-0">
+          <div id="sourcesList">
+            <?php include __DIR__ . '/leads_source_list_fragment.php'; ?>
+          </div>
         </div>
       </div>
-    </div>
   </div>
 
   <?php include_once __DIR__ . '/../includes/modal-source.php'; ?>
@@ -46,8 +49,17 @@ include_once __DIR__ . '/../config/db.php';
   const sourceModalEl = document.getElementById('sourceModal');
   const sourceModal = sourceModalEl ? new bootstrap.Modal(sourceModalEl) : null;
 
-  function loadSources(){
-    fetch('leads_source_list_fragment.php').then(r=>r.text()).then(html=>{ document.getElementById('sourcesList').innerHTML = html; initSourceHandlers(); });
+  let currentSourcesPerPage = 10;
+  function getSourcesPerPage(){ return currentSourcesPerPage; }
+  function loadSources(page=1){
+    var per = getSourcesPerPage();
+    var q = document.getElementById('sourceSearch') ? document.getElementById('sourceSearch').value.trim() : '';
+    var url = 'leads_source_list_fragment.php?page='+encodeURIComponent(page)+'&per_page='+encodeURIComponent(per);
+    if (q) url += '&q='+encodeURIComponent(q);
+    fetch(url).then(r=>r.text()).then(html=>{ document.getElementById('sourcesList').innerHTML = html.replace(/<!--SOURCES_TOTAL:\d+-->/, ''); initSourceHandlers(); attachSourcePaginationHandlers();
+      // sync footer per-page and wire change
+      var foot = document.getElementById('sourcePerPageFooter'); if (foot){ foot.value = currentSourcesPerPage; foot.onchange = function(){ currentSourcesPerPage = parseInt(this.value,10)||10; loadSources(1); }; }
+    });
   }
 
   function initSourceHandlers(){
@@ -82,7 +94,17 @@ include_once __DIR__ . '/../config/db.php';
     fetch(url, { method:'POST', body:fd }).then(r=>r.json()).then(j=>{ alert(j.message || (j.success? 'Saved':'Error')); if (j.success){ sourceModal.hide(); loadSources(); } });
   });
 
-  document.addEventListener('DOMContentLoaded', ()=>{ initSourceHandlers(); });
+  document.addEventListener('DOMContentLoaded', ()=>{ initSourceHandlers(); attachSourcePaginationHandlers();
+    // If the server rendered the fragment, handlers above will wire it; also load via JS to ensure footer wiring and fresh data
+    var foot = document.getElementById('sourcePerPageFooter'); if (foot){ foot.value = currentSourcesPerPage; foot.onchange = function(){ currentSourcesPerPage = parseInt(this.value,10)||10; loadSources(1); }; }
+    loadSources(1);
+  });
+
+  function attachSourcePaginationHandlers(){
+    document.querySelectorAll('.sources-page-link').forEach(function(a){ a.addEventListener('click', function(e){ e.preventDefault(); var p = parseInt(this.dataset.page,10)||1; loadSources(p); }); });
+  }
+
+  // header per-page removed; footer-only control is used
 </script>
 
 </body>

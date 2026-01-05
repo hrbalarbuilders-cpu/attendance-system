@@ -51,4 +51,5 @@ function nav_class($target, $current) {
   <a class="<?php echo nav_class('clients.php', $current); ?>" href="clients.php"><span class="icon">👥</span> Clients</a>
   <a class="<?php echo nav_class('sources.php', $current); ?>" href="sources.php"><span class="icon">📂</span> Source of Leads</a>
   <a class="<?php echo nav_class('looking_for.php', $current); ?>" href="looking_for.php"><span class="icon">🔎</span> Looking For</a>
+  <a class="<?php echo nav_class('sales_persons.php', $current); ?>" href="sales_persons.php"><span class="icon">🧑‍💼</span> Sales Person</a>
 </div>

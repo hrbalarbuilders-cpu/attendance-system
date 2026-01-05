@@ -6,19 +6,15 @@ include_once __DIR__ . '/../config/db.php';
 // Order by id to avoid referencing `name` when that column may not exist in older schemas
 $res = $con->query("SELECT * FROM lead_sources ORDER BY id DESC");
 $out = ['sources'=>[]];
+// return all sources; include status so client can decide how to present them
 if ($res && $res->num_rows){
   while($r = $res->fetch_assoc()){
-    // normalize name/title
     if (!isset($r['name']) && isset($r['title'])) $r['name'] = $r['title'];
-    $raw = $r['status'] ?? '';
-    $isActive = false;
-    if ($raw === 'active' || $raw === 'Active' || $raw === 'ACTIVE') $isActive = true;
-    if ($raw === '1' || $raw === 1 || $raw === 1.0) $isActive = true;
-    // also accept boolean-ish values
-    if ($raw === true) $isActive = true;
-    if ($isActive){
-      $out['sources'][] = ['id'=> (int)$r['id'], 'name'=> (string)($r['name'] ?? '')];
-    }
+    $out['sources'][] = [
+      'id' => (int)$r['id'],
+      'name' => (string)($r['name'] ?? ''),
+      'status' => isset($r['status']) ? (string)$r['status'] : ''
+    ];
   }
 }
 echo json_encode($out);

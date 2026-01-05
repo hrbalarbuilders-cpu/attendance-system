@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1:3306
--- Generation Time: Jan 02, 2026 at 01:51 PM
+-- Generation Time: Jan 05, 2026 at 11:20 AM
 -- Server version: 8.4.7
 -- PHP Version: 8.3.28
 
@@ -310,7 +310,76 @@ CREATE TABLE IF NOT EXISTS `leads` (
 --
 
 INSERT INTO `leads` (`id`, `name`, `contact_number`, `email`, `looking_for_id`, `lead_source_id`, `sales_person`, `profile`, `pincode`, `city`, `state`, `country`, `reference`, `purpose`, `lead_status`, `notes`, `created_at`, `updated_at`) VALUES
-(1, 'Sachin Mandal', '6352816306', 'sachin.balarbuilders@gmail.com', 0, 0, '', 'business', '396105', 'Valsad', 'Gujarat', 'India', '', 'Stay', '', 'asa', '2025-12-29 18:28:08', '2025-12-30 18:05:17');
+(1, 'Sachin Mandal', '6352816306', 'sachin.balarbuilders@gmail.com', 1, 2, 'Sachin Mandal', 'business', '396105', 'Valsad', 'Gujarat', 'India', '', 'Stay', 'Hot', 'asa', '2025-12-29 18:28:08', '2026-01-05 16:36:00');
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `lead_looking_for`
+--
+
+DROP TABLE IF EXISTS `lead_looking_for`;
+CREATE TABLE IF NOT EXISTS `lead_looking_for` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `name` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `status` varchar(32) COLLATE utf8mb4_unicode_ci DEFAULT 'active',
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`)
+) ENGINE=MyISAM AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+--
+-- Dumping data for table `lead_looking_for`
+--
+
+INSERT INTO `lead_looking_for` (`id`, `name`, `status`, `created_at`, `updated_at`) VALUES
+(1, 'Residential', 'active', '2026-01-05 10:01:49', NULL);
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `lead_looking_for_types`
+--
+
+DROP TABLE IF EXISTS `lead_looking_for_types`;
+CREATE TABLE IF NOT EXISTS `lead_looking_for_types` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `looking_for_id` int NOT NULL,
+  `name` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `looking_for_id` (`looking_for_id`)
+) ENGINE=MyISAM AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+--
+-- Dumping data for table `lead_looking_for_types`
+--
+
+INSERT INTO `lead_looking_for_types` (`id`, `looking_for_id`, `name`) VALUES
+(4, 1, 'Villa');
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `lead_looking_for_type_subtypes`
+--
+
+DROP TABLE IF EXISTS `lead_looking_for_type_subtypes`;
+CREATE TABLE IF NOT EXISTS `lead_looking_for_type_subtypes` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `type_id` int NOT NULL,
+  `name` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `type_id` (`type_id`)
+) ENGINE=MyISAM AUTO_INCREMENT=11 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+--
+-- Dumping data for table `lead_looking_for_type_subtypes`
+--
+
+INSERT INTO `lead_looking_for_type_subtypes` (`id`, `type_id`, `name`) VALUES
+(10, 4, '6 BHK'),
+(9, 4, '4 BHK'),
+(8, 4, '3 BHK');
 
 -- --------------------------------------------------------
 
@@ -328,15 +397,30 @@ CREATE TABLE IF NOT EXISTS `lead_sources` (
   `updated_at` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   KEY `idx_lead_sources_name` (`name`)
-) ENGINE=MyISAM AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=MyISAM AUTO_INCREMENT=19 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 --
 -- Dumping data for table `lead_sources`
 --
 
 INSERT INTO `lead_sources` (`id`, `name`, `description`, `status`, `created_at`, `updated_at`) VALUES
-(2, 'D', 'ok', 0, '2025-12-30 16:37:09', '2025-12-30 16:56:26'),
-(3, 'hh', '', 1, '2025-12-30 16:56:11', '2025-12-30 16:56:11');
+(2, 'D', 'ok', 1, '2025-12-30 16:37:09', '2026-01-05 12:56:13'),
+(3, 'hh', '', 1, '2025-12-30 16:56:11', '2025-12-30 16:56:11'),
+(4, 'a', '', 1, '2026-01-05 13:24:36', '2026-01-05 13:24:36'),
+(5, 'b', '', 1, '2026-01-05 13:24:40', '2026-01-05 13:24:40'),
+(6, 'c', '', 1, '2026-01-05 13:24:44', '2026-01-05 13:24:44'),
+(7, 'd', '', 1, '2026-01-05 13:24:49', '2026-01-05 13:24:49'),
+(8, 'eeeeeeeeeee', '', 1, '2026-01-05 13:24:53', '2026-01-05 14:56:54'),
+(9, 'f', '', 1, '2026-01-05 13:24:59', '2026-01-05 13:24:59'),
+(10, 'g', '', 1, '2026-01-05 13:25:05', '2026-01-05 13:25:05'),
+(11, 'h', '', 1, '2026-01-05 13:25:10', '2026-01-05 13:25:10'),
+(12, 'j', '', 1, '2026-01-05 13:25:14', '2026-01-05 13:25:14'),
+(13, 'k', '', 1, '2026-01-05 13:25:17', '2026-01-05 13:25:17'),
+(14, 'l', '', 1, '2026-01-05 13:25:21', '2026-01-05 13:25:21'),
+(15, 'm', '', 1, '2026-01-05 13:25:26', '2026-01-05 13:25:26'),
+(16, 'vv', '', 1, '2026-01-05 13:34:43', '2026-01-05 13:34:43'),
+(17, 'vv', '', 1, '2026-01-05 13:34:46', '2026-01-05 13:34:46'),
+(18, 'd', '', 1, '2026-01-05 13:39:32', '2026-01-05 13:39:32');
 
 -- --------------------------------------------------------
 
@@ -428,19 +512,29 @@ INSERT INTO `leave_type_employees` (`id`, `leave_type_id`, `employee_id`, `creat
 -- --------------------------------------------------------
 
 --
--- Table structure for table `looking_for`
+-- Table structure for table `sales_persons`
 --
 
-DROP TABLE IF EXISTS `looking_for`;
-CREATE TABLE IF NOT EXISTS `looking_for` (
+DROP TABLE IF EXISTS `sales_persons`;
+CREATE TABLE IF NOT EXISTS `sales_persons` (
   `id` int NOT NULL AUTO_INCREMENT,
-  `title` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `type` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `subtype` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `employee_id` int NOT NULL,
+  `status` tinyint DEFAULT '1',
   `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
-  `updated_at` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`)
-) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  `updated_at` datetime DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `employee_id` (`employee_id`)
+) ENGINE=InnoDB AUTO_INCREMENT=12 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+--
+-- Dumping data for table `sales_persons`
+--
+
+INSERT INTO `sales_persons` (`id`, `employee_id`, `status`, `created_at`, `updated_at`) VALUES
+(1, 1, 1, '2026-01-05 13:04:59', NULL),
+(3, 4, 1, '2026-01-05 13:13:20', NULL),
+(4, 5, 1, '2026-01-05 13:20:04', NULL),
+(6, 3, 1, '2026-01-05 13:23:45', NULL);
 
 -- --------------------------------------------------------
 
