@@ -143,6 +143,21 @@
     justify-content: center;
     margin-bottom: 2px;
   }
+  .app-icon svg {
+    width: 26px;
+    height: 26px;
+    display: block;
+    stroke: #fff;
+    fill: none;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    shape-rendering: geometricPrecision;
+  }
+  .app-icon svg .icon-fill {
+    fill: #fff;
+    stroke: none;
+  }
   .app-name {
     font-size: 0.98rem;
     font-weight: 500;
@@ -196,55 +211,98 @@ if ($adminPos !== false) {
   <div class="apps-grid" id="appsGrid">
     <div class="app-item" data-name="company" data-href="<?php echo $base; ?>/index.php" data-enabled="1">
       <div class="app-icon" style="background: #16a34a;">
-        <span style="font-size: 1.3rem;">🏢</span>
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M3 21V5a2 2 0 0 1 2-2h7v18" />
+          <path d="M12 7h7a2 2 0 0 1 2 2v12" />
+          <path d="M7 7h2M7 11h2M7 15h2" />
+          <path d="M15 11h2M15 15h2" />
+        </svg>
       </div>
       <div class="app-name">Company</div>
     </div>
     <div class="app-item" data-name="dashboard" data-href="<?php echo $base; ?>/index.php" data-enabled="1">
       <div class="app-icon" style="background: #3b82f6;">
-        <span style="font-size: 1.3rem;">📊</span>
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M4 19V5" />
+          <path d="M4 19h16" />
+          <path d="M8 17v-6" />
+          <path d="M12 17V7" />
+          <path d="M16 17v-4" />
+        </svg>
       </div>
       <div class="app-name">Dashboard</div>
     </div>
     <div class="app-item" data-name="reception" data-href="<?php echo $base; ?>/index.php" data-enabled="1">
       <div class="app-icon" style="background: #2563eb;">
-        <span style="font-size: 1.3rem;">🛎️</span>
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M6 17h12" />
+          <path d="M8 17a4 4 0 1 1 8 0" />
+          <path d="M12 5v2" />
+          <path d="M10 7h4" />
+        </svg>
       </div>
       <div class="app-name">Reception</div>
     </div>
     <div class="app-item" data-name="hr" data-href="<?php echo $base; ?>/hr/employees.php" data-enabled="1">
       <div class="app-icon" style="background: #eab308;">
-        <span style="font-size: 1.3rem;">👥</span>
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M16 11a3 3 0 1 0-6 0 3 3 0 0 0 6 0Z" />
+          <path d="M7 20a5 5 0 0 1 10 0" />
+          <path d="M6 11a2 2 0 1 0-4 0 2 2 0 0 0 4 0Z" />
+          <path d="M2.5 20a4.5 4.5 0 0 1 6.5-4" />
+        </svg>
       </div>
       <div class="app-name">HR</div>
     </div>
     <div class="app-item" data-name="recruitment" data-href="<?php echo $base; ?>/index.php">
       <div class="app-icon" style="background: #a855f7;">
-        <span style="font-size: 1.3rem;">📝</span>
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
+          <path d="M14 3v5h5" />
+          <path d="M9 13h6" />
+          <path d="M9 17h4" />
+        </svg>
       </div>
       <div class="app-name">Recruitment</div>
     </div>
     <div class="app-item" data-name="leads" data-href="<?php echo $base; ?>/leads/leads.php" data-enabled="1">
       <div class="app-icon" style="background: #06b6d4;">
-        <span style="font-size: 1.3rem;">📈</span>
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M4 17l6-6 4 4 6-8" />
+          <path d="M20 7v6h-6" />
+        </svg>
       </div>
       <div class="app-name">Leads</div>
     </div>
     <div class="app-item" data-name="letters" data-href="<?php echo $base; ?>/index.php">
       <div class="app-icon" style="background: #14b8a6;">
-        <span style="font-size: 1.3rem;">✉️</span>
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M4 6h16v12H4z" />
+          <path d="m4 7 8 6 8-6" />
+        </svg>
       </div>
       <div class="app-name">Letters</div>
     </div>
     <div class="app-item" data-name="legal" data-href="<?php echo $base; ?>/index.php">
       <div class="app-icon" style="background: #8b5cf6;">
-        <span style="font-size: 1.3rem;">⚖️</span>
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M12 3v18" />
+          <path d="M7 6h10" />
+          <path d="M6 6l-3 6h6z" />
+          <path d="M18 6l-3 6h6z" />
+          <path d="M9 20h6" />
+        </svg>
       </div>
       <div class="app-name">Legal</div>
     </div>
     <div class="app-item" data-name="contractors" data-href="<?php echo $base; ?>/index.php">
       <div class="app-icon" style="background: #f97316;">
-        <span style="font-size: 1.3rem;">🧑‍🔧</span>
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M20 20v-1a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v1" />
+          <path d="M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z" />
+          <path d="M20 8l-2 2" />
+          <path d="M22 10l-2-2" />
+        </svg>
       </div>
       <div class="app-name">Contractors</div>
     </div>
