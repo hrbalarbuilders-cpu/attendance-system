@@ -13,6 +13,9 @@ include_once __DIR__ . '/../config/db.php';
     body{ background:#f3f5fb; font-family:system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
     .page-wrap{ max-width:1200px; margin:0 auto; padding-top:72px; }
     .section-title{ font-size:1.6rem; font-weight:700; }
+    /* Keep dropdown menus visible within responsive tables */
+    .table-responsive{ overflow: visible !important; }
+    .dropdown-menu{ z-index: 5005; }
   </style>
 </head>
 <body>

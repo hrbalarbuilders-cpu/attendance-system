@@ -59,8 +59,13 @@ $c = $con->query("SHOW COLUMNS FROM leads LIKE 'looking_for_subtypes'"); if ($c 
 $selectLFType = $hasLfType ? "(SELECT name FROM lead_looking_for_types t2 WHERE t2.id = l.looking_for_type_id LIMIT 1) AS looking_for_type_name" : "'' AS looking_for_type_name";
 $selectLFSub = $hasLfSub ? "(SELECT GROUP_CONCAT(DISTINCT st.name ORDER BY st.id SEPARATOR ', ') FROM lead_looking_for_type_subtypes st WHERE l.looking_for_subtypes IS NOT NULL AND l.looking_for_subtypes <> '' AND FIND_IN_SET(st.id, l.looking_for_subtypes)) AS looking_for_subtypes_names" : "'' AS looking_for_subtypes_names";
 
+// Detect and select human-readable 'Looking For' name if available
+$hasLookingFor = false;
+$c = $con->query("SHOW COLUMNS FROM leads LIKE 'looking_for_id'"); if ($c && $c->num_rows) $hasLookingFor = true;
+$selectLookingFor = $hasLookingFor ? "(SELECT name FROM lead_looking_for lf WHERE lf.id = l.looking_for_id LIMIT 1) AS looking_for_name" : "'' AS looking_for_name";
+
 $res = $con->query(
-  "SELECT l.*, " . $selectSourceExpr . ", " . $selectLFType . ", " . $selectLFSub . " FROM leads l LEFT JOIN lead_sources ls ON l.lead_source_id = ls.id " . $where_sql . " ORDER BY l.id DESC LIMIT " . (int)$offset . "," . (int)$per_page
+  "SELECT l.*, " . $selectSourceExpr . ", " . $selectLookingFor . ", " . $selectLFType . ", " . $selectLFSub . " FROM leads l LEFT JOIN lead_sources ls ON l.lead_source_id = ls.id " . $where_sql . " ORDER BY l.id DESC LIMIT " . (int)$offset . "," . (int)$per_page
 );
 
 function col($row, $k){
@@ -74,11 +79,10 @@ function col($row, $k){
       <tr>
         <th>#</th>
         <th>Name</th>
-        <th>Contact</th>
-        <th>Email</th>
+        <th class="text-nowrap">Contact</th>
         <th>Lead Source</th>
         <th>Looking For</th>
-        <th>LF Type</th>
+        <th><span class="d-block">LF</span><span class="d-block">Type</span></th>
         <th>LF Subtypes</th>
         <th>Sales Person</th>
         <th>Status</th>
@@ -92,10 +96,9 @@ function col($row, $k){
       <tr data-id="<?= col($row,'id') ?>">
         <td><?= col($row,'id') ?></td>
         <td><?= col($row,'name') ?></td>
-        <td><?= col($row,'contact_number') ?></td>
-        <td><?= col($row,'email') ?></td>
+        <td class="text-nowrap"><?= col($row,'contact_number') ?></td>
         <td><?= col($row,'source_name') ?></td>
-        <td><?= col($row,'looking_for_id') ?></td>
+        <td><?= (col($row,'looking_for_name') !== '') ? col($row,'looking_for_name') : col($row,'looking_for_id') ?></td>
         <td><?= col($row,'looking_for_type_name') ?></td>
         <td><?= col($row,'looking_for_subtypes_names') ?></td>
         <td><?= col($row,'sales_person') ?></td>
@@ -120,12 +123,23 @@ function col($row, $k){
         </td>
         <td><?= col($row,'created_at') ?></td>
         <td>
-          <button class="btn btn-sm btn-outline-primary btn-edit-lead" data-lead-id="<?= col($row,'id') ?>">Edit</button>
-          <button class="btn btn-sm btn-outline-danger btn-delete-lead">Delete</button>
+          <div class="dropup position-relative">
+            <button type="button" class="btn btn-sm btn-light" data-bs-toggle="dropdown" data-bs-display="static" aria-expanded="false" aria-label="Actions" title="Actions">
+              &#8942;
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end">
+              <li>
+                <button type="button" class="dropdown-item btn-edit-lead" data-lead-id="<?= col($row,'id') ?>">Edit</button>
+              </li>
+              <li>
+                <button type="button" class="dropdown-item text-danger btn-delete-lead">Delete</button>
+              </li>
+            </ul>
+          </div>
         </td>
       </tr>
     <?php endwhile; else: ?>
-      <tr><td colspan="12">No leads found.</td></tr>
+      <tr><td colspan="11">No leads found.</td></tr>
     <?php endif; ?>
     </tbody>
   </table>

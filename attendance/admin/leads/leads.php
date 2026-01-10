@@ -5,6 +5,8 @@
 		<meta name="viewport" content="width=device-width, initial-scale=1">
 		<title>Leads</title>
 		<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+		<!-- jQuery + Select2 for improved selects in modal -->
+		<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
 		<style>
 			body {
 				background: #f3f5fb;
@@ -17,6 +19,13 @@
 			}
 			.card-main { border-radius: 8px; box-shadow: 0 4px 14px rgba(15,23,42,0.06); overflow: hidden; }
 			.card-main-header { background: #ffffff; }
+			/* No internal table scrollbars: wrap content instead of scrolling */
+			#leadsList .table-responsive { overflow: visible !important; }
+			#leadsList #leadsTable { table-layout: fixed; width: 100%; }
+			#leadsList #leadsTable th:not(.text-nowrap),
+			#leadsList #leadsTable td:not(.text-nowrap) { white-space: normal; word-break: break-word; }
+			/* Keep dropdown menu above the table/footer */
+			#leadsList .dropdown-menu { z-index: 5005; }
 		</style>
 </head>
 <body>
@@ -58,10 +67,127 @@
 <?php include_once __DIR__ . '/../includes/modal-lead.php'; ?>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<!-- jQuery + Select2 (used by editLead helper) -->
+<script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 <script>
+function showLeadApiError(message){
+	try{
+		var msg = (message === undefined || message === null) ? '' : String(message);
+		msg = msg.trim();
+		if (!msg) msg = 'Request failed';
+		var now = Date.now();
+		if (window._leadApiLastAlert && (now - window._leadApiLastAlert) < 1500) return;
+		window._leadApiLastAlert = now;
+		alert(msg);
+	}catch(e){}
+}
+
+function fetchJson(url){
+	return fetch(url, { credentials: 'same-origin' })
+		.then(function(r){ return r.text(); })
+		.then(function(text){
+			var json;
+			try{ json = JSON.parse(text); }catch(e){ showLeadApiError('Invalid server response'); throw e; }
+			if (json && json.success === false){ showLeadApiError(json.message || 'Request failed'); }
+			return json;
+		});
+}
+
+function loadLeadFormLookups(){
+	var bundleUrl = (window.__leadApiUrls && window.__leadApiUrls.bundle) ? window.__leadApiUrls.bundle : 'get_lead_form_payload.php';
+	return fetchJson(bundleUrl + '?per_page=1000').then(function(j){
+		if (!j || j.success === false) return null;
+		try{ if (typeof window.storeLeadBundlePayload === 'function') window.storeLeadBundlePayload(j); }catch(e){}
+		if (typeof window.populateLeadSelects === 'function'){
+			window.populateLeadSelects({
+				sources: Array.isArray(j.sources) ? j.sources : [],
+				sales: Array.isArray(j.sales) ? j.sales : [],
+				lookings: Array.isArray(j.lookings) ? j.lookings : []
+			});
+		}
+		return j;
+	}).catch(function(){ return null; });
+}
+
+// jQuery helper to open edit modal and prefill values using AJAX
+function editLead(id){
+	if (!id) return;
+	var bundleUrl = (window.__leadApiUrls && window.__leadApiUrls.bundle) ? window.__leadApiUrls.bundle : 'get_lead_form_payload.php';
+	fetchJson(bundleUrl + '?id=' + encodeURIComponent(id) + '&per_page=1000').then(function(resp){
+		if (!resp || resp.success === false){ alert(resp && resp.message? resp.message : 'Failed to load lead'); return; }
+		var d = resp.lead || {};
+		// Set both snapshot and prefill for modal compatibility (must be set before populating selects)
+		window._pendingLeadPrefillSnapshot = JSON.parse(JSON.stringify(d));
+		window.pendingLeadPrefill = d;
+		try{ if (typeof window.storeLeadBundlePayload === 'function') window.storeLeadBundlePayload(resp); }catch(e){}
+		// Populate selects from bundled lookups
+		if (typeof window.populateLeadSelects === 'function'){
+			window.populateLeadSelects({
+				sources: Array.isArray(resp.sources) ? resp.sources : [],
+				sales: Array.isArray(resp.sales) ? resp.sales : [],
+				lookings: Array.isArray(resp.lookings) ? resp.lookings : []
+			});
+		}
+		// Set both snapshot and prefill for modal compatibility
+		window._pendingLeadPrefillSnapshot = JSON.parse(JSON.stringify(d));
+		window.pendingLeadPrefill = d;
+
+		// simple inputs
+		$('#leadId').val(d.id || '');
+		$('#leadName').val(d.name || '');
+		$('#leadContact').val(d.contact_number || '');
+		$('#leadEmail').val(d.email || '');
+		$('#leadProfile').val(d.profile || '').trigger('change');
+		$('#leadPincode').val(d.pincode || '');
+		$('#leadCity').val(d.city || '');
+		$('#leadState').val(d.state || '');
+		$('#leadCountry').val(d.country || '');
+		$('#leadPurpose').val(d.purpose || '');
+		$('#leadNotes').val(d.notes || '');
+
+		// selects: use .val(...).trigger('change') so Select2 or other listeners update
+		try{ $('#leadSourceId').val(String(d.lead_source_id || '')).trigger('change'); }catch(e){} // numeric id
+		try{ $('#leadLookingForId').val(String(d.looking_for_id || '')).trigger('change'); }catch(e){}
+		// Type options are loaded asynchronously based on Looking For. Store desired value and let modal logic apply it when options arrive.
+		try{ $('#leadLookingForTypeId').val(''); }catch(e){}
+
+		// subtypes: stored as CSV; populate hidden. DO NOT call updateSubtypeHidden() now —
+		// the subtype select will be populated later and will read the hidden value to preselect options.
+		try{ var subs = []; if (d.looking_for_subtypes) subs = String(d.looking_for_subtypes).split(',').filter(Boolean); $('#leadLookingForSubtypeIds').val(subs.join(',')); }catch(e){} 
+
+		// sales person: options are strings (name). Ensure option exists then set
+		try{
+			var spVal = d.sales_person || '';
+			var spSel = $('#leadSalesPerson');
+			if (spVal && spSel.find('option[value="'+spVal+'"]').length === 0){ spSel.append($('<option>').val(spVal).text(spVal)); }
+			spSel.val(spVal).trigger('change');
+		}catch(e){} 
+
+		// status
+		try{ var st = (d.lead_status||'').toString().toLowerCase(); if (st==='h') st='hot'; if (st==='c') st='cold'; if (st==='w') st='warm'; $('#leadStatus').val(st).trigger('change'); }catch(e){}
+
+		// finally show modal
+		try{ var modalEl = document.getElementById('leadModal'); var m = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl); m.show(); }catch(e){} 
+	}).catch(function(){ alert('Failed to load lead'); });}
+// delegate clicks on .btn-edit-lead
+$(document).on('click', '.btn-edit-lead', function(e){ e.preventDefault(); var id = $(this).data('lead-id') || $(this).attr('data-lead-id'); editLead(id); });
+
+// initialize select2 for better UX (safe to ignore if not available)
+// Use dropdownParent inside the Bootstrap modal so the dropdown isn't hidden behind the modal/backdrop.
+$(function(){
+	try{
+		var $modal = $('#leadModal');
+		$('#leadSalesPerson').select2({ width:'100%', placeholder: '-- Select sales person --', allowClear:true, dropdownParent: $modal });
+			$('#leadSourceId').select2({ width:'100%', placeholder: '-- Select source --', allowClear:true, dropdownParent: $modal });
+			$('#leadLookingForId').select2({ width:'100%', placeholder: '-- Select --', allowClear:true, dropdownParent: $modal });
+			$('#leadLookingForTypeId').select2({ width:'100%', placeholder: '-- Select type --', allowClear:true, dropdownParent: $modal });
+	}catch(e){}
+});
 	const leadModalEl = document.getElementById('leadModal');
 	let leadModal = null;
 	try{ if (leadModalEl) leadModal = new bootstrap.Modal(leadModalEl); }catch(e){}
+	// wrap hide removed (debug-only)
 
 	let currentLeadsPage = 1;
 	let currentLeadsPerPage = 10;
@@ -96,128 +222,7 @@
 
 
 	function initLeadHandlers(){
-		// helper to open edit modal for a given lead id
-		function openEditLead(id){
-			var idStr = (id === undefined || id === null) ? '' : String(id).trim();
-			var idNum = parseInt(idStr, 10) || 0;
-			if (!idStr || idNum <= 0){ return; }
-			fetch('get_lead.php?id='+encodeURIComponent(idNum)).then(r=>r.json()).then(j=>{
-						if (!j.success){ alert(j.message||'Failed to load'); return; }
-						const d = j.data || {};
-						const setIf = (id, val)=>{ const el = document.getElementById(id); if (!el) return; el.value = val === undefined || val === null ? '' : val; };
-						fetch('get_sources.php').then(r=>r.json()).then(sdata=>{
-										try{
-															if (sdata && Array.isArray(sdata.sources)) populateLeadSelects({ sources: sdata.sources });
-															// if lead has no source assigned but there is exactly one active source, auto-select it
-															if ((d.lead_source_id === 0 || d.lead_source_id === null || d.lead_source_id === '' || d.lead_source_id === undefined) && Array.isArray(sdata.sources) && sdata.sources.length === 1){
-																d.lead_source_id = sdata.sources[0].id;
-																d.lead_source_name = sdata.sources[0].name || d.lead_source_name;
-															}
-										}catch(e){ }
-								// populate fields
-								setIf('leadId', d.id ?? '');
-								setIf('leadName', d.name ?? '');
-								setIf('leadContact', d.contact_number ?? '');
-								setIf('leadEmail', d.email ?? '');
-								setIf('leadLookingForId', d.looking_for_id ?? '');
-								var lfEl = document.getElementById('leadLookingForId'); if (lfEl) lfEl.dispatchEvent(new Event('change'));
-								// set saved LF type and subtype ids (if present)
-								setIf('leadLookingForTypeId', d.looking_for_type_id ?? '');
-								var hiddenSub = document.getElementById('leadLookingForSubtypeIds'); if (hiddenSub) hiddenSub.value = d.looking_for_subtypes ?? '';
-								(function(){
-									var srcSel = document.getElementById('leadSourceId');
-									var srcVal = d.lead_source_id ?? '';
-									srcVal = srcVal === null || srcVal === undefined ? '' : String(srcVal);
-                                    
-									var attempts = 0;
-									function trySetSource(){
-										attempts++;
-										if (!srcSel) srcSel = document.getElementById('leadSourceId');
-										if (srcSel){
-											var opt = srcSel.querySelector('option[value="'+srcVal+'"]');
-											if (opt){
-												srcSel.value = srcVal;
-												srcSel.dispatchEvent(new Event('change'));
-												return true;
-											}
-											// try match by option text (name) in case value types or ids differ
-											var match = Array.from(srcSel.options).find(function(o){ return (o.text||'').toString().trim().toLowerCase() === (d.lead_source_name||'').toString().trim().toLowerCase(); });
-											if (match){
-												srcSel.value = match.value;
-												srcSel.dispatchEvent(new Event('change'));
-												return true;
-											}
-											if (srcVal && d.lead_source_name){
-												var o = document.createElement('option'); o.value = srcVal; o.text = d.lead_source_name; o.selected = true; srcSel.appendChild(o);
-												srcSel.dispatchEvent(new Event('change'));
-												return true;
-											}
-											if (srcVal === ''){
-												srcSel.value = '';
-												srcSel.dispatchEvent(new Event('change'));
-												return true;
-											}
-										}
-										if (attempts < 6){
-											setTimeout(trySetSource, 120);
-										} else {
-										}
-									}
-									trySetSource();
-								})();
-								setIf('leadSalesPerson', d.sales_person ?? '');
-								setIf('leadProfile', d.profile ?? '');
-								setIf('leadPincode', d.pincode ?? '');
-								setIf('leadCity', d.city ?? '');
-								setIf('leadState', d.state ?? '');
-								setIf('leadCountry', d.country ?? '');
-								setIf('leadReference', d.reference ?? '');
-								setIf('leadPurpose', d.purpose ?? '');
-								(function(){
-									var st = (d.lead_status || '').toString().toLowerCase();
-									if (st === 'h' || st === 'hot') st = 'hot';
-									else if (st === 'c' || st === 'cold') st = 'cold';
-									else if (st === 'w' || st === 'warm' || st === 'warn') st = 'warm';
-									var stEl = document.getElementById('leadStatus');
-									if (stEl){ stEl.value = st; stEl.dispatchEvent(new Event('change')); }
-								})();
-								setIf('leadNotes', d.notes ?? '');
-								if (leadModal) leadModal.show();
-						}).catch(()=>{
-								// fallback: populate anyway
-								setIf('leadId', d.id ?? '');
-								setIf('leadName', d.name ?? '');
-								setIf('leadContact', d.contact_number ?? '');
-								setIf('leadEmail', d.email ?? '');
-								setIf('leadLookingForId', d.looking_for_id ?? '');
-								setIf('leadSourceId', d.lead_source_id ?? '');
-								setIf('leadSalesPerson', d.sales_person ?? '');
-								setIf('leadProfile', d.profile ?? '');
-								setIf('leadPincode', d.pincode ?? '');
-								setIf('leadCity', d.city ?? '');
-								setIf('leadState', d.state ?? '');
-								setIf('leadCountry', d.country ?? '');
-								setIf('leadReference', d.reference ?? '');
-								setIf('leadPurpose', d.purpose ?? '');
-								setIf('leadStatus', d.lead_status ?? '');
-								setIf('leadNotes', d.notes ?? '');
-								if (leadModal) leadModal.show();
-						});
-				}).catch(err=>{ alert('Failed to load lead data'); });
-		}
-
-		// attach click handlers (existing buttons)
-		document.querySelectorAll('.btn-edit-lead').forEach(btn=> btn.addEventListener('click', function(){ const tr = this.closest('tr'); const id = tr && tr.dataset && tr.dataset.id ? tr.dataset.id : (this.dataset && this.dataset.leadId ? this.dataset.leadId : null); if (id) openEditLead(id); }));
-
-		// delegated handler for dynamically added rows or if direct handlers fail
-		var leadsListEl = document.getElementById('leadsList');
-		if (leadsListEl){
-			leadsListEl.addEventListener('click', function(e){
-				var btn = e.target.closest && e.target.closest('.btn-edit-lead');
-				if (btn){ var tr = btn.closest('tr'); var id = tr && tr.dataset && tr.dataset.id ? tr.dataset.id : (btn.dataset && btn.dataset.leadId ? btn.dataset.leadId : null); if (id) openEditLead(id); }
-			});
-		}
-
+		// Delete handlers only (edit is handled by jQuery delegate above)
 		document.querySelectorAll('.btn-delete-lead').forEach(btn=>{
 			btn.addEventListener('click', function(){
 				const tr = this.closest('tr');
@@ -233,7 +238,10 @@
 	document.getElementById('btnAddLead').addEventListener('click', ()=>{
 		document.getElementById('leadForm').reset();
 		document.getElementById('leadId').value = '';
-		leadModal.show();
+		// Clear any pending prefill so modal fetches lookups for a fresh add
+		try{ delete window.pendingLeadPrefill; delete window._pendingLeadPrefillSnapshot; }catch(e){}
+		// Preload lookups so the modal is ready immediately (modal itself also has a fallback).
+		loadLeadFormLookups().finally(function(){ leadModal.show(); });
 	});
 
 	document.getElementById('leadForm').addEventListener('submit', function(e){
@@ -261,8 +269,28 @@
 	var leadSalesFilterEl = document.getElementById('leadSalesFilter'); if (leadSalesFilterEl) leadSalesFilterEl.addEventListener('change', function(){ loadLeads(1); });
 	// header per-page removed; footer-only control is handled in loadLeads
 
-	// populate sales person filter with all sales persons (first page large)
-	(function(){ fetch('get_sales_persons.php?page=1&per_page=1000').then(r=>r.json()).then(j=>{ if (j && Array.isArray(j.sales)){ var sel = document.getElementById('leadSalesFilter'); if (!sel) return; var opt = document.createElement('option'); opt.value=''; opt.text='All Sales'; sel.appendChild(opt); j.sales.forEach(function(s){ var o = document.createElement('option'); o.value = s.name || s.employee_id || s.id; o.text = s.name || ('#'+s.employee_id); sel.appendChild(o); }); } }); })();
+	function populateSalesFilterFromSales(sales){
+		var sel = document.getElementById('leadSalesFilter');
+		if (!sel) return;
+		sel.innerHTML = '';
+		var opt = document.createElement('option');
+		opt.value = '';
+		opt.text = 'All Sales';
+		sel.appendChild(opt);
+		(sales || []).forEach(function(s){
+			var o = document.createElement('option');
+			o.value = s.name || s.employee_id || s.id;
+			o.text = s.name || ('#'+s.employee_id);
+			sel.appendChild(o);
+		});
+	}
+
+	// populate sales person filter using the bundled lookups (single request)
+	(function(){
+		loadLeadFormLookups().then(function(j){
+			if (j && Array.isArray(j.sales)) populateSalesFilterFromSales(j.sales);
+		});
+	})();
 
 	// header per-page removed; footer-only control is used
 

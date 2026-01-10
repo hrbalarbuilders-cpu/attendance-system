@@ -52,8 +52,13 @@ function esc($v){ return htmlspecialchars($v); }
         <td><?= esc($row['created_at']) ?></td>
         <td><?= esc($row['updated_at']) ?></td>
         <td>
-          <button class="btn btn-sm btn-outline-primary btn-edit-source">Edit</button>
-          <button class="btn btn-sm btn-outline-danger btn-delete-source">Delete</button>
+          <div class="dropdown position-relative">
+            <button type="button" class="btn btn-sm btn-light" data-bs-toggle="dropdown" data-bs-boundary="viewport" aria-expanded="false" aria-label="Actions" title="Actions">&#8942;</button>
+            <ul class="dropdown-menu dropdown-menu-end">
+              <li><button type="button" class="dropdown-item btn-edit-source">Edit</button></li>
+              <li><button type="button" class="dropdown-item text-danger btn-delete-source">Delete</button></li>
+            </ul>
+          </div>
         </td>
       </tr>
     <?php endwhile; else: ?>

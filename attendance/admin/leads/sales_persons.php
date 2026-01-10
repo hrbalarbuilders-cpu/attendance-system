@@ -12,6 +12,9 @@ include_once __DIR__ . '/../config/db.php';
     .page-wrap{ max-width:1200px; margin:0 auto; padding-top:72px; }
     .section-title{ font-size:1.6rem; font-weight:700; }
     .container{max-width:1100px}
+    /* Keep dropdown menus visible within responsive tables */
+    .table-responsive{ overflow: visible !important; }
+    .dropdown-menu{ z-index: 5005; }
   </style>
 </head>
 <body>
@@ -71,7 +74,12 @@ function loadSP(page = 1){
         if (st === '1' || st.toLowerCase() === 'active') statusText = 'Active';
         else if (st === '0' || st.toLowerCase() === 'inactive') statusText = 'Inactive';
         else statusText = s.status || '';
-        out += '<tr><td>'+s.id+'</td><td>'+ (s.name||'') +'</td><td>'+ statusText +'</td><td><button data-id="'+s.id+'" class="btn btn-sm btn-danger btn-del-sp">Delete</button></td></tr>';
+        out += '<tr><td>'+s.id+'</td><td>'+ (s.name||'') +'</td><td>'+ statusText +'</td>';
+        out += '<td><div class="dropdown position-relative">';
+        out += '<button type="button" class="btn btn-sm btn-light" data-bs-toggle="dropdown" data-bs-boundary="viewport" aria-expanded="false" aria-label="Actions" title="Actions">&#8942;</button>';
+        out += '<ul class="dropdown-menu dropdown-menu-end">';
+        out += '<li><button type="button" data-id="'+s.id+'" class="dropdown-item text-danger btn-del-sp">Delete</button></li>';
+        out += '</ul></div></td></tr>';
       });
     } else { out += '<tr><td colspan="4">No sales persons found.</td></tr>'; }
     out += '</tbody></table></div>';
@@ -107,39 +115,14 @@ function loadSP(page = 1){
   });
 }
 function loadEmployeesIntoSelect(){
-  fetch('../hr/employees_list.php?ajax=1').then(r=>r.text()).then(html=>{
-    // parse names and real employee ids from table html (rows now include data-id)
-    var temp = document.createElement('div'); temp.innerHTML = html;
-    var rows = temp.querySelectorAll('tbody tr');
+  fetch('../hr/get_employees_json.php?active=1').then(r=>r.json()).then(j=>{
     var sel = document.getElementById('spEmployee'); sel.innerHTML = '';
-    rows.forEach(function(r){
-      // Prefer the data-id attribute added to each <tr>. Fallback to parsing links if missing.
-      var id = r.dataset && r.dataset.id ? r.dataset.id : '';
-      if (!id) {
-        var link = r.querySelector('a[href*="view_employee.php"], a[href*="edit_employee.php"]');
-        if (link && link.getAttribute('href')) {
-          try { id = (new URL(link.getAttribute('href'), location.href)).searchParams.get('id') || ''; } catch (e) { id = '';} 
-        }
-      }
-      // Name cell is the third column (index 2) in the fragment
-      var nameTd = r.querySelectorAll('td')[2] || r.querySelectorAll('td')[1];
-      var name = '';
-      if (nameTd) {
-        // Prefer the strong name container .fw-semibold to avoid the 'Updated:' small text
-        var strong = nameTd.querySelector('.fw-semibold');
-        if (strong && strong.innerText.trim()) {
-          name = strong.innerText.trim();
-        } else {
-          // Fallback: take the first line only
-          name = nameTd.innerText.split('\n')[0].trim();
-        }
-      }
-      // Also ensure employee is Active by checking the Status column (td index 5)
-      var statusTd = r.querySelectorAll('td')[5] || r.querySelectorAll('td')[4];
-      var statusText = statusTd ? (statusTd.innerText || '').toLowerCase() : '';
-      var isActive = statusText.includes('active') || statusText.trim() === '1' || statusText.trim() === 'active';
-      if (id && name && isActive){ var o = document.createElement('option'); o.value = id; o.text = name; sel.appendChild(o); }
-    });
+    if (j && Array.isArray(j.employees)){
+      j.employees.forEach(function(e){ var o = document.createElement('option'); o.value = String(e.id); o.text = (e.name||'').toString(); sel.appendChild(o); });
+    }
+  }).catch(function(err){
+    console.error('Failed to load employees', err);
+    // fallback: keep select empty
   });
 }
 document.getElementById('btnAddSP').addEventListener('click', function(){ loadEmployeesIntoSelect(); var m = new bootstrap.Modal(document.getElementById('spModal')); m.show(); });

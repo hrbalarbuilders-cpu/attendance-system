@@ -50,8 +50,13 @@ function e($v){ return htmlspecialchars($v); }
             <td><?= e(ucfirst((string)$row['status'])) ?></td>
             <td><?= e($row['created_at'] ?? '') ?></td>
           <td>
-            <button class="btn btn-sm btn-outline-primary btn-edit-lf">Edit</button>
-            <button class="btn btn-sm btn-outline-danger btn-delete-lf">Delete</button>
+              <div class="dropdown position-relative">
+                <button type="button" class="btn btn-sm btn-light" data-bs-toggle="dropdown" data-bs-boundary="viewport" aria-expanded="false" aria-label="Actions" title="Actions">&#8942;</button>
+                <ul class="dropdown-menu dropdown-menu-end">
+                  <li><button type="button" class="dropdown-item btn-edit-lf">Edit</button></li>
+                  <li><button type="button" class="dropdown-item text-danger btn-delete-lf">Delete</button></li>
+                </ul>
+              </div>
           </td>
         </tr>
       <?php endwhile; else: ?>

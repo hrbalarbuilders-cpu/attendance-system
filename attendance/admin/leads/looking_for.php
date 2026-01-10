@@ -7,7 +7,7 @@ include_once __DIR__ . '/../config/db.php';
   <meta charset="utf-8">
   <title>Looking For</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-  <style> body{ background:#f3f5fb; font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;} .page-wrap{max-width:1200px;margin:0 auto;padding-top:72px;} .section-title{font-size:1.6rem;font-weight:700;} </style>
+  <style> body{ background:#f3f5fb; font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;} .page-wrap{max-width:1200px;margin:0 auto;padding-top:72px;} .section-title{font-size:1.6rem;font-weight:700;} .table-responsive{ overflow: visible !important; } .dropdown-menu{ z-index: 5005; } </style>
 </head>
 <body>
 <?php include_once __DIR__ . '/../includes/header.php'; ?>
