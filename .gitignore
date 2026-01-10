@@ -1,3 +1,6 @@
+
+# Local debug scripts
+attendance/admin/debug_employees.php
 # Ignore local debug logs and editor files
 attendance/attendance_api/*.log
 .vscode/
