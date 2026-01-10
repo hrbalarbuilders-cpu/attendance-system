@@ -10,15 +10,15 @@
     <div class="card-header card-main-header d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2">
       <div class="d-flex align-items-center gap-3 w-100">
         <div class="w-100" style="max-width:300px;">
-          <input type="search" id="employeeSearch" class="form-control form-control-sm" placeholder="Search employees...">
+          <input type="search" id="employeeSearch" class="form-control form-control-sm" placeholder="Search employees..." value="<?php echo isset($q) ? htmlspecialchars($q) : ''; ?>">
         </div>
-        <small class="text-muted ms-2">Total: <?php echo $result ? $result->num_rows : 0; ?></small>
+        <small class="text-muted ms-2">Total: <?php echo isset($totalCount) ? (int)$totalCount : ($result ? (int)$result->num_rows : 0); ?></small>
       </div>
     </div>
     <div class="table-responsive">
       <table class="table table-hover align-middle mb-0">
         <thead id="employeeTableHead">
-          <tr class="text-nowrap" data-id="<?php echo isset($row['id']) ? (int)$row['id'] : ''; ?>">
+          <tr class="text-nowrap">
             <th>#</th>
             <th>Emp Code</th>
             <th>Name</th>
@@ -31,6 +31,7 @@
         <tbody id="employeeTableBody">
         <?php
         $i = 1;
+        $offset = isset($offset) ? (int)$offset : 0;
         if ($result && $result->num_rows > 0) {
           while ($row = $result->fetch_assoc()) {
             $department = $row["department_name"] ?? "-";
@@ -45,7 +46,7 @@
             $updated   = $updatedTs ? date('d M Y, h:i A', strtotime($updatedTs)) : '-';
         ?>
           <tr class="text-nowrap">
-            <td><?php echo $i++; ?></td>
+            <td><?php echo $offset + $i++; ?></td>
             <td><?php echo htmlspecialchars($row['emp_code'] ?? ''); ?></td>
             <td>
               <div class="fw-semibold"><?php echo htmlspecialchars($row['name'] ?? ''); ?></div>
@@ -100,67 +101,120 @@
         </tbody>
       </table>
     </div>
+
+    <?php
+      $totalCountSafe = isset($totalCount) ? (int)$totalCount : 0;
+      $pageSafe = isset($page) ? (int)$page : 1;
+      $perSafe = isset($per_page) ? (int)$per_page : 10;
+      $totalPages = max(1, (int)ceil(($totalCountSafe ?: 0) / max(1, $perSafe)));
+      $startRec = $totalCountSafe > 0 ? ($offset + 1) : 0;
+      $endRec = $totalCountSafe > 0 ? ($offset + ($result ? $result->num_rows : 0)) : 0;
+    ?>
+
+    <?php if ($totalPages > 1): ?>
+      <nav class="mt-3 px-2">
+        <ul class="pagination mb-0">
+          <?php
+            $start = max(1, $pageSafe - 3);
+            $end = min($totalPages, $pageSafe + 3);
+            if ($pageSafe > 1) echo '<li class="page-item"><a href="#" class="page-link emp-page-link" data-page="'.($pageSafe-1).'">Previous</a></li>';
+            if ($start > 1) echo '<li class="page-item"><a href="#" class="page-link emp-page-link" data-page="1">1</a></li>' . ($start>2 ? '<li class="page-item disabled"><span class="page-link">...</span></li>':'' );
+            for ($p = $start; $p <= $end; $p++){
+              $cls = $p == $pageSafe ? ' page-item active' : ' page-item';
+              echo '<li class="'.$cls.'"><a href="#" class="page-link emp-page-link" data-page="'.$p.'">'.$p.'</a></li>';
+            }
+            if ($end < $totalPages) echo ($end < $totalPages-1 ? '<li class="page-item disabled"><span class="page-link">...</span></li>':'') . '<li class="page-item"><a href="#" class="page-link emp-page-link" data-page="'.$totalPages.'">'.$totalPages.'</a></li>';
+            if ($pageSafe < $totalPages) echo '<li class="page-item"><a href="#" class="page-link emp-page-link" data-page="'.($pageSafe+1).'">Next</a></li>';
+          ?>
+        </ul>
+      </nav>
+    <?php endif; ?>
+
+    <div class="d-flex justify-content-between align-items-center mt-2 px-2 pb-2">
+      <div class="small text-muted">Record <?php echo $startRec; ?>–<?php echo $endRec; ?> of <?php echo $totalCountSafe; ?></div>
+      <div class="d-flex align-items-center gap-2">
+        <label class="small text-muted mb-0">Rows:</label>
+        <select id="employeePerPageFooter" class="form-select form-select-sm" style="width:80px;">
+          <option value="10" <?php if($perSafe==10) echo 'selected'; ?>>10</option>
+          <option value="25" <?php if($perSafe==25) echo 'selected'; ?>>25</option>
+          <option value="50" <?php if($perSafe==50) echo 'selected'; ?>>50</option>
+          <option value="100" <?php if($perSafe==100) echo 'selected'; ?>>100</option>
+        </select>
+      </div>
+    </div>
   </div>
   
 
 
 <script type="text/javascript" id="employeeSearchScriptSource">
-// Employee search/filter logic for AJAX injection
-function filterEmployeeTable() {
+// Employees list pagination + server-side search (executed via injection in employees.php)
+(function(){
   var input = document.getElementById('employeeSearch');
-  var filter = input ? input.value.toLowerCase().trim() : '';
-  var tbody = document.getElementById('employeeTableBody');
-  var rows = tbody ? tbody.getElementsByTagName('tr') : [];
-  var anyVisible = false;
-  var noDataRow = null;
-  var matchedNames = [];
-  for (var i = 0; i < rows.length; i++) {
-    var row = rows[i];
-    // Identify the 'no employees found' row by its unique text
-    if (row.innerText && row.innerText.trim().toLowerCase().includes('no employees found')) {
-      noDataRow = row;
-      continue;
-    }
-    // Only filter rows with actual employee data
-    // Get relevant columns: Emp Code, Name, Department, Shift
-    var tds = row.getElementsByTagName('td');
-    var searchText = '';
-    var nameText = '';
-    if (tds.length > 4) {
-      searchText = [tds[1], tds[2], tds[3], tds[4]]
-        .map(function(td) { return (td.innerText || td.textContent || '').toLowerCase().trim(); })
-        .join(' ');
-      // Name column (tds[2])
-      nameText = (tds[2].innerText || tds[2].textContent || '').trim();
-    }
-    // Use includes for partial match
-    if (filter === '' || searchText.includes(filter)) {
-      row.style.display = '';
-      anyVisible = true;
-      if (filter !== '' && nameText) {
-        matchedNames.push(nameText);
-      }
-    } else {
-      row.style.display = 'none';
-    }
+  var perSel = document.getElementById('employeePerPageFooter');
+
+  function getContentArea(){
+    return document.getElementById('contentArea') || document.querySelector('[data-hr-content]');
   }
-  if (noDataRow) {
-    noDataRow.style.display = anyVisible ? 'none' : '';
+
+  function safeShowLoader(){
+    try{ if (typeof showLoader === 'function') showLoader(); }catch(e){}
   }
-  // Remove matched names display; only show 'no matching employees' if needed
-  var resultsDiv = document.getElementById('searchResults');
-  if (resultsDiv) {
-    if (filter !== '' && matchedNames.length === 0) {
-      resultsDiv.innerHTML = '<span class="text-danger">No matching employees found.</span>';
-    } else {
-      resultsDiv.innerHTML = '';
+  function safeHideLoader(){
+    try{ if (typeof hideLoader === 'function') hideLoader(); }catch(e){}
+  }
+
+  function loadEmployees(page){
+    page = parseInt(page, 10) || 1;
+    var per = perSel ? (parseInt(perSel.value, 10) || 10) : 10;
+    var q = input ? String(input.value || '').trim() : '';
+    var url = 'employees_list.php?ajax=1&page=' + encodeURIComponent(page) + '&per_page=' + encodeURIComponent(per);
+    if (q) url += '&q=' + encodeURIComponent(q);
+
+    var contentArea = getContentArea();
+    if (!contentArea) {
+      // Fallback for standalone page
+      window.location.assign(url.replace('?ajax=1&', '?'));
+      return;
     }
+
+    safeShowLoader();
+    fetch(url, { credentials: 'same-origin' })
+      .then(function(r){ return r.text(); })
+      .then(function(html){
+        contentArea.innerHTML = html;
+        try{ if (typeof initEmployeesListEvents === 'function') initEmployeesListEvents(); }catch(e){}
+      })
+      .catch(function(){
+        contentArea.innerHTML = "<div class='alert alert-danger m-3'>Failed to load employees.</div>";
+      })
+      .finally(function(){
+        safeHideLoader();
+      });
   }
-}
-var searchInput = document.getElementById('employeeSearch');
-if (searchInput) {
-  searchInput.addEventListener('input', filterEmployeeTable);
-  // Run once on load to ensure correct state
-  filterEmployeeTable();
-}
+
+  // Pagination clicks
+  document.querySelectorAll('.emp-page-link').forEach(function(a){
+    a.addEventListener('click', function(e){
+      e.preventDefault();
+      var p = parseInt(this.dataset.page, 10) || 1;
+      loadEmployees(p);
+    });
+  });
+
+  // Per-page change
+  if (perSel) {
+    perSel.addEventListener('change', function(){
+      loadEmployees(1);
+    });
+  }
+
+  // Search (debounced)
+  var t = null;
+  if (input) {
+    input.addEventListener('input', function(){
+      if (t) clearTimeout(t);
+      t = setTimeout(function(){ loadEmployees(1); }, 250);
+    });
+  }
+})();
 </script>

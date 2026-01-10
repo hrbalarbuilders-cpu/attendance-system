@@ -671,6 +671,8 @@ function initEmployeesListEvents() {
     // Dynamically inject and execute the search/filter script if present in loaded HTML (for AJAX)
     var scriptInHtml = document.querySelector('#employeeSearchScriptSource');
     if (scriptInHtml) {
+      var old = document.getElementById('employeeSearchScript');
+      if (old && old.parentNode) old.parentNode.removeChild(old);
       var newScript = document.createElement('script');
       newScript.id = 'employeeSearchScript';
       newScript.textContent = scriptInHtml.textContent;
