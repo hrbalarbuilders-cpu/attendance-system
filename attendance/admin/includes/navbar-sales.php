@@ -6,50 +6,25 @@ function nav_class($target, $current) {
   return $current === $target ? 'top-nav-pill active' : 'top-nav-pill';
 }
 ?>
-<style>
-.top-nav-wrapper {
-  background: #ffffff;
-  border-radius: 8px;
-  padding: 10px 14px;
-  box-shadow: 0 4px 14px rgba(15,23,42,0.06);
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  flex-wrap: wrap;
-}
-.top-nav-wrapper .top-nav-pill {
-  padding: 8px 16px;
-  border-radius: 8px;
-  background: transparent;
-  color: #222;
-  font-weight: 500;
-  text-decoration: none;
-  cursor: pointer;
-  display: inline-flex;
-  gap: 8px;
-  align-items: center;
-}
-.top-nav-wrapper .top-nav-pill.active,
-.top-nav-wrapper .top-nav-pill:hover {
-  background: #111827;
-  color: #fff;
-}
-.top-nav-wrapper .top-nav-pill .icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  border-radius: 4px;
-  background: rgba(255,255,255,0.12);
-  font-size: 0.9rem;
-}
-</style>
+<?php include_once __DIR__ . '/top-nav-styles.php'; ?>
 
-<div class="top-nav-wrapper">
-  <a class="<?php echo nav_class('leads.php', $current); ?>" href="leads.php"><span class="icon">📈</span> Leads</a>
-  <a class="<?php echo nav_class('clients.php', $current); ?>" href="clients.php"><span class="icon">👥</span> Clients</a>
-  <a class="<?php echo nav_class('sources.php', $current); ?>" href="sources.php"><span class="icon">📂</span> Source of Leads</a>
-  <a class="<?php echo nav_class('looking_for.php', $current); ?>" href="looking_for.php"><span class="icon">🔎</span> Looking For</a>
-  <a class="<?php echo nav_class('sales_persons.php', $current); ?>" href="sales_persons.php"><span class="icon">🧑‍💼</span> Sales Person</a>
+<div class="top-nav-shell">
+  <div class="top-nav-row">
+    <div class="top-nav-viewport">
+      <div class="top-nav-inner-row">
+        <button type="button" class="top-nav-arrow" data-topnav-arrow="left" aria-label="Scroll left">‹</button>
+        <div class="top-nav-wrapper">
+          <a class="<?php echo nav_class('leads.php', $current); ?>" href="leads.php"><span class="icon">📈</span> Leads</a>
+          <a class="<?php echo nav_class('clients.php', $current); ?>" href="clients.php"><span class="icon">👥</span> Clients</a>
+          <a class="<?php echo nav_class('sources.php', $current); ?>" href="sources.php"><span class="icon">📂</span> Source of Leads</a>
+          <a class="<?php echo nav_class('looking_for.php', $current); ?>" href="looking_for.php"><span class="icon">🔎</span> Looking For</a>
+          <a class="<?php echo nav_class('sales_persons.php', $current); ?>" href="sales_persons.php"><span class="icon">🧑‍💼</span> Sales Person</a>
+        </div>
+        <button type="button" class="top-nav-arrow" data-topnav-arrow="right" aria-label="Scroll right">›</button>
+      </div>
+      <div class="top-nav-scrollbar" aria-hidden="true">
+        <div class="top-nav-scrollbar-thumb"></div>
+      </div>
+    </div>
+  </div>
 </div>

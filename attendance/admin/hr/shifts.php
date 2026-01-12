@@ -12,6 +12,7 @@ $errors = [];
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $id                     = isset($_POST['id']) ? (int)$_POST['id'] : 0;
     $shift_name             = trim($_POST['shift_name'] ?? '');
+  $shift_color            = trim($_POST['shift_color'] ?? '#0d6efd');
     $start_time             = $_POST['start_time'] ?? '';
     $end_time               = $_POST['end_time'] ?? '';
     $lunch_start            = $_POST['lunch_start'] ?: null; // optional
@@ -46,6 +47,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Basic validation
     if ($shift_name === '') {
         $errors[] = "Shift name is required.";
+    }
+    if ($shift_color === '') {
+      $shift_color = '#0d6efd';
+    }
+    if (!preg_match('/^#([0-9a-fA-F]{6}|[0-9a-fA-F]{3})$/', $shift_color)) {
+      $errors[] = "Shift color must be a valid hex color (example: #0d6efd).";
     }
     if ($start_time === '') {
         $errors[] = "Start time is required.";
@@ -123,15 +130,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($id === 0) {
             // INSERT
             $sql = "INSERT INTO shifts 
-                (shift_name, start_time, end_time, lunch_start, lunch_end,
+            (shift_name, shift_color, start_time, end_time, lunch_start, lunch_end,
                  early_clock_in_before, late_mark_after, half_day_after, total_punches)
-                VALUES (?,?,?,?,?,?,?,?,?)";
+            VALUES (?,?,?,?,?,?,?,?,?,?)";
 
             $stmt = $con->prepare($sql);
             if ($stmt) {
                 $stmt->bind_param(
-                    "sssssiiii",
+                  "ssssssiiii",
                     $shift_name,
+                  $shift_color,
                     $start_time,
                     $end_time,
                     $lunch_start,
@@ -153,6 +161,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $updated_at = date("Y-m-d H:i:s");
             $sql = "UPDATE shifts SET 
                         shift_name = ?, 
+                  shift_color = ?,
                         start_time = ?, 
                         end_time = ?, 
                         lunch_start = ?, 
@@ -167,8 +176,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt = $con->prepare($sql);
             if ($stmt) {
                 $stmt->bind_param(
-                    "sssssiiiisi",
+                  "ssssssiiiisi",
                     $shift_name,
+                  $shift_color,
                     $start_time,
                     $end_time,
                     $lunch_start,
@@ -241,16 +251,86 @@ if (isset($_GET['edit'])) {
 }
 
 // ---------------- LIST ALL SHIFTS ----------------
-$list = $con->query("SELECT * FROM shifts ORDER BY shift_name ASC");
+$page = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
+$per_page = isset($_GET['per_page']) ? max(1, (int)$_GET['per_page']) : 10;
+if ($per_page > 100) $per_page = 100;
+$offset = ($page - 1) * $per_page;
+
+$totalCount = 0;
+$countRes = $con->query("SELECT COUNT(*) AS c FROM shifts");
+if ($countRes && $countRes->num_rows) {
+  $r = $countRes->fetch_assoc();
+  $totalCount = (int)($r['c'] ?? 0);
+}
+
+$list = $con->query(
+  "SELECT * FROM shifts ORDER BY shift_name ASC LIMIT " . (int)$offset . "," . (int)$per_page
+);
 
 // ---------------- RENDER FUNCTION ----------------
-function renderShiftContent($errors, $editRow, $list) {
+function renderShiftContent($errors, $editRow, $list, $totalCount, $page, $per_page, $offset) {
 ?>
 <div class="container py-4">
-  <div class="d-flex justify-content-between align-items-center mb-3">
-    <h3 class="mb-0">Shift Master</h3>
-    <a href="employees.php" class="btn btn-outline-secondary">Go to Employees</a>
-  </div>
+  <?php if ($GLOBALS['isAjax']): ?>
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <div>
+        <h3 class="mb-0">Shift Master</h3>
+        <div class="text-muted small">Create and manage shifts</div>
+      </div>
+      <?php if (!$editRow): ?>
+        <button type="button"
+                class="btn btn-dark btn-sm"
+                id="openCreateShiftModal"
+                data-bs-toggle="modal"
+                data-bs-target="#createShiftModal">
+          + Create Shift
+        </button>
+      <?php else: ?>
+        <a href="shifts.php?ajax=1" class="btn btn-outline-secondary btn-sm">Back</a>
+      <?php endif; ?>
+    </div>
+
+    <?php
+      $modalIsEdit = (bool)$editRow;
+      $modalTitle = $modalIsEdit ? 'Edit Shift' : 'Create Shift';
+      $modalSubmitText = $modalIsEdit ? 'Update Shift' : 'Save Shift';
+      $modalId = $modalIsEdit ? (int)($editRow['id'] ?? 0) : 0;
+      $modalShiftName = $modalIsEdit ? (string)($editRow['shift_name'] ?? '') : '';
+      $modalShiftColor = $modalIsEdit ? (string)($editRow['shift_color'] ?? '#0d6efd') : '#0d6efd';
+
+      $modalStart = '';
+      if ($modalIsEdit && !empty($editRow['start_time'])) {
+        $modalStart = date('h:i A', strtotime($editRow['start_time']));
+      }
+      $modalEnd = '';
+      if ($modalIsEdit && !empty($editRow['end_time'])) {
+        $modalEnd = date('h:i A', strtotime($editRow['end_time']));
+      }
+      $modalLunchStart = '';
+      if ($modalIsEdit && !empty($editRow['lunch_start'])) {
+        $modalLunchStart = date('h:i A', strtotime($editRow['lunch_start']));
+      }
+      $modalLunchEnd = '';
+      if ($modalIsEdit && !empty($editRow['lunch_end'])) {
+        $modalLunchEnd = date('h:i A', strtotime($editRow['lunch_end']));
+      }
+      $modalHalf = '';
+      if ($modalIsEdit && !empty($editRow['start_time']) && isset($editRow['half_day_after'])) {
+        $halfTs = strtotime($editRow['start_time']) + ((int)$editRow['half_day_after'] * 60);
+        if ($halfTs) $modalHalf = date('h:i A', $halfTs);
+      }
+      $modalEarly = $modalIsEdit ? (int)($editRow['early_clock_in_before'] ?? 0) : 0;
+      $modalLate = $modalIsEdit ? (int)($editRow['late_mark_after'] ?? 10) : 10;
+      $modalPunches = $modalIsEdit ? (int)($editRow['total_punches'] ?? 4) : 4;
+    ?>
+
+    <?php include '../includes/modal-shift.php'; ?>
+  <?php else: ?>
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <h3 class="mb-0">Shift Master</h3>
+      <a href="employees.php" class="btn btn-outline-secondary">Go to HR</a>
+    </div>
+  <?php endif; ?>
 
   <?php if (!empty($errors)) { ?>
     <div class="alert alert-danger">
@@ -262,7 +342,8 @@ function renderShiftContent($errors, $editRow, $list) {
     </div>
   <?php } ?>
 
-  <!-- ADD / EDIT FORM -->
+  <!-- ADD / EDIT FORM (not used inside Settings; Settings uses modal) -->
+  <?php if (!$GLOBALS['isAjax']): ?>
   <div class="card mb-4">
     <div class="card-header">
       <?php echo $editRow ? 'Edit Shift' : 'Add New Shift'; ?>
@@ -281,7 +362,17 @@ function renderShiftContent($errors, $editRow, $list) {
                    value="<?php echo htmlspecialchars($editRow['shift_name'] ?? ($_POST['shift_name'] ?? '')); ?>">
           </div>
 
-          <div class="col-md-4">
+          <div class="col-md-2">
+            <label class="form-label">Shift Color</label>
+            <input type="color"
+                   name="shift_color"
+                   class="form-control form-control-color"
+                   style="width: 100%;"
+                   value="<?php echo htmlspecialchars($editRow['shift_color'] ?? ($_POST['shift_color'] ?? '#0d6efd')); ?>"
+                   title="Choose shift color">
+          </div>
+
+          <div class="col-md-3">
             <label class="form-label">Start Time</label>
             <div class="input-group">
               <input type="text"
@@ -301,7 +392,7 @@ function renderShiftContent($errors, $editRow, $list) {
             </div>
           </div>
 
-          <div class="col-md-4">
+          <div class="col-md-3">
             <label class="form-label">End Time</label>
             <div class="input-group">
               <input type="text"
@@ -360,7 +451,7 @@ function renderShiftContent($errors, $editRow, $list) {
           </div>
 
           <div class="col-md-4">
-            <label class="form-label">Early Clock-In (minutes before start)</label>
+            <label class="form-label">Early Clock-In</label>
             <input type="number"
                    name="early_clock_in_before"
                    class="form-control"
@@ -407,9 +498,6 @@ function renderShiftContent($errors, $editRow, $list) {
                    min="1"
                    required
                    value="<?php echo htmlspecialchars($editRow['total_punches'] ?? ($_POST['total_punches'] ?? '4')); ?>">
-            <div class="form-text">
-              Example: 2 = IN+OUT, 4 = IN/OUT/Lunch IN/OUT
-            </div>
           </div>
         </div>
 
@@ -424,36 +512,33 @@ function renderShiftContent($errors, $editRow, $list) {
       </form>
     </div>
   </div>
+  <?php endif; ?>
+
+  
 
    <!-- SHIFT LIST TABLE -->
-  <div class="card">
-    <div class="card-header d-flex justify-content-between align-items-center">
-      <span class="fw-semibold">Shift List</span>
-      <small class="text-muted">
-        Total: <?php echo $list ? $list->num_rows : 0; ?>
-      </small>
-    </div>
-
-    <div class="card-body p-0">
+  <div class="card settings-card shadow-sm border-0" style="border-radius:18px;">
+    <div class="card-body">
       <div class="table-responsive">
-        <table class="table table-hover align-middle mb-0">
-          <thead class="table-light">
+        <table class="table table-hover table-borderless align-middle mb-0 w-100" style="font-size: 0.97rem;">
+          <thead class="table-light" style="font-size:0.93em;">
             <tr class="text-nowrap text-center">
-              <th style="width: 50px;">#</th>
-              <th class="text-start">Shift</th>
-              <th>Timing</th>
-              <th>Lunch</th>
-              <th>Early In</th>
-              <th>Late Mark</th>
-              <th>Half Time</th>
-              <th>Punches</th>
-              <th>Updated</th>
-              <th style="width: 130px;" class="text-end">Action</th>
+              <th class="text-center px-2" style="width: 50px;">#</th>
+              <th class="text-start px-2">Shift</th>
+              <th class="text-center px-2" style="width: 90px;">Color</th>
+              <th class="text-center px-2">Timing</th>
+              <th class="text-center px-2">Lunch</th>
+              <th class="text-center px-2">Early In</th>
+              <th class="text-center px-2">Late Mark</th>
+              <th class="text-center px-2">Half Time</th>
+              <th class="text-center px-2">Punches</th>
+              <th class="text-center px-2">Updated</th>
+              <th class="text-center px-2" style="width: 130px;">Action</th>
             </tr>
           </thead>
           <tbody>
           <?php
-          $i = 1;
+            $i = $totalCount > 0 ? ($offset + 1) : 1;
           if ($list && $list->num_rows > 0) {
               while ($row = $list->fetch_assoc()) {
 
@@ -487,6 +572,12 @@ function renderShiftContent($errors, $editRow, $list) {
                 </div>
               </td>
 
+              <td>
+                <?php $c = $row['shift_color'] ?? '#0d6efd'; ?>
+                <span class="d-inline-block rounded" style="width:18px;height:18px;background:<?php echo htmlspecialchars($c); ?>;border:1px solid rgba(0,0,0,.15);"></span>
+                <div class="small text-muted" style="line-height:1.1;"><?php echo htmlspecialchars($c); ?></div>
+              </td>
+
               <td><?php echo $timing; ?></td>
               <td><?php echo $lunch; ?></td>
 
@@ -497,7 +588,7 @@ function renderShiftContent($errors, $editRow, $list) {
               <td><?php echo (int)$row['total_punches']; ?></td>
               <td><?php echo $updated; ?></td>
 
-              <td class="text-end text-nowrap">
+              <td class="text-center text-nowrap">
                 <?php if ($GLOBALS['isAjax']) { ?>
                   <a href="javascript:void(0)"
                      class="btn btn-sm btn-outline-primary me-1 shift-edit"
@@ -527,7 +618,7 @@ function renderShiftContent($errors, $editRow, $list) {
           } else {
           ?>
             <tr>
-              <td colspan="10" class="text-center py-4 text-muted">
+              <td colspan="11" class="text-center py-4 text-muted">
                 No shifts found. Please add one.
               </td>
             </tr>
@@ -535,6 +626,49 @@ function renderShiftContent($errors, $editRow, $list) {
           </tbody>
         </table>
       </div>
+
+    <div id="shiftsPagingMeta"
+         data-page="<?php echo (int)$page; ?>"
+         data-per-page="<?php echo (int)$per_page; ?>"
+         style="display:none;"></div>
+
+    <?php
+      $totalPages = max(1, (int)ceil(($totalCount ?: 0) / max(1, $per_page)));
+      $startRec = $totalCount > 0 ? ($offset + 1) : 0;
+      $endRec = $totalCount > 0 ? ($offset + ($list ? $list->num_rows : 0)) : 0;
+    ?>
+
+    <?php if ($totalPages > 1): ?>
+      <nav class="mt-3 px-3">
+        <ul class="pagination mb-0">
+          <?php
+            $start = max(1, $page - 3);
+            $end = min($totalPages, $page + 3);
+            if ($page > 1) echo '<li class="page-item"><a href="#" class="page-link shifts-page-link" data-page="'.($page-1).'">Previous</a></li>';
+            if ($start > 1) echo '<li class="page-item"><a href="#" class="page-link shifts-page-link" data-page="1">1</a></li>' . ($start>2 ? '<li class="page-item disabled"><span class="page-link">...</span></li>':'' );
+            for ($p = $start; $p <= $end; $p++){
+              $cls = $p == $page ? ' page-item active' : ' page-item';
+              echo '<li class="'.$cls.'"><a href="#" class="page-link shifts-page-link" data-page="'.$p.'">'.$p.'</a></li>';
+            }
+            if ($end < $totalPages) echo ($end < $totalPages-1 ? '<li class="page-item disabled"><span class="page-link">...</span></li>':'') . '<li class="page-item"><a href="#" class="page-link shifts-page-link" data-page="'.$totalPages.'">'.$totalPages.'</a></li>';
+            if ($page < $totalPages) echo '<li class="page-item"><a href="#" class="page-link shifts-page-link" data-page="'.($page+1).'">Next</a></li>';
+          ?>
+        </ul>
+      </nav>
+    <?php endif; ?>
+
+    <div class="d-flex justify-content-between align-items-center mt-2 px-3 pb-3">
+      <div class="small text-muted">Record <?php echo (int)$startRec; ?>–<?php echo (int)$endRec; ?> of <?php echo (int)$totalCount; ?></div>
+      <div class="d-flex align-items-center gap-2">
+        <label class="small text-muted mb-0">Rows:</label>
+        <select id="shiftsPerPageFooter" class="form-select form-select-sm" style="width:80px;">
+          <option value="10" <?php if($per_page==10) echo 'selected'; ?>>10</option>
+          <option value="25" <?php if($per_page==25) echo 'selected'; ?>>25</option>
+          <option value="50" <?php if($per_page==50) echo 'selected'; ?>>50</option>
+          <option value="100" <?php if($per_page==100) echo 'selected'; ?>>100</option>
+        </select>
+      </div>
+    </div>
     </div>
   </div>
 
@@ -544,7 +678,7 @@ function renderShiftContent($errors, $editRow, $list) {
 
 // ------------- AJAX vs FULL PAGE OUTPUT -------------
 if ($isAjax) {
-    renderShiftContent($errors, $editRow, $list);
+  renderShiftContent($errors, $editRow, $list, $totalCount, $page, $per_page, $offset);
     exit;
 }
 ?>
@@ -556,7 +690,7 @@ if ($isAjax) {
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
 <body>
-<?php renderShiftContent($errors, $editRow, $list); ?>
+<?php renderShiftContent($errors, $editRow, $list, $totalCount, $page, $per_page, $offset); ?>
 
 <!-- Shared Time Picker Modal for Shift Master (copied from settings_shift_tab.php) -->
 <div class="modal fade" id="shiftTimePickerModal" tabindex="-1" aria-hidden="true">

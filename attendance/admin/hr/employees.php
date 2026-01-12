@@ -39,44 +39,7 @@ if ($empRes && $empRes->num_rows > 0) {
       max-width: 1200px;
     }
 
-    /* top tabs nav */
-    .top-nav-wrapper {
-      background: #ffffff;
-      border-radius: 8px;
-      padding: 6px 10px;
-      box-shadow: 0 4px 14px rgba(15, 23, 42, 0.08);
-      display: inline-flex;
-      gap: 16px;
-      align-items: center;
-    }
-    .top-nav-pill {
-      padding: 8px 20px;
-      border-radius: 6px;
-      border: none;
-      background: transparent;
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      font-size: 0.9rem;
-      font-weight: 500;
-      color: #4b5563;
-      cursor: pointer;
-      text-decoration: none;
-    }
-    .top-nav-pill.active {
-      background: #111827;
-      color: #ffffff;
-    }
-    .top-nav-pill span.icon {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      width: 22px;
-      height: 22px;
-      border-radius: 4px;
-      background: rgba(255,255,255,0.12);
-      font-size: 0.9rem;
-    }
+    /* Top nav tab styles live in admin/includes/top-nav-styles.php */
 
     .section-title {
       font-size: 1.8rem;
@@ -87,19 +50,23 @@ if ($empRes && $empRes->num_rows > 0) {
     .btn-round-icon {
       width: 40px;
       height: 40px;
-      border-radius: 6px;
+      min-width: 40px;
+      min-height: 40px;
+      flex-shrink: 0;
+      border-radius: 999px;
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      border: none;
-      background: #111827;
-      color: #fff;
+      border: 1px solid #e5e7eb;
+      background: #ffffff;
+      color: #111827;
       font-size: 1.1rem;
       text-decoration: none;
+      box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
     }
 
     /* toast */
-    #statusAlertWrapper { z-index: 1080; }
+    #statusAlertWrapper { z-index: 1080; top: 72px; }
 
     /* Loader overlay */
     #loaderOverlay {
@@ -161,57 +128,11 @@ if ($empRes && $empRes->num_rows > 0) {
       background-color: rgba(0, 0, 0, 0.5);
     }
 
-    /* iOS switch (used inside employees_list) */
-    .switch {
-      position: relative;
-      display: inline-block;
-      width: 52px;
-      height: 28px;
-    }
-    .switch input {
-      opacity: 0;
-      width: 0;
-      height: 0;
-    }
-    .slider {
-      position: absolute;
-      cursor: pointer;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background-color: #d1d5db;
-      transition: .3s;
-      border-radius: 999px;
-    }
-    .slider:before {
-      position: absolute;
-      content: "";
-      height: 22px;
-      width: 22px;
-      left: 3px;
-      bottom: 3px;
-      background-color: white;
-      transition: .3s;
-      border-radius: 50%;
-    }
-    input:checked + .slider {
-      background-color: #000;
-    }
-    input:checked + .slider:before {
-      transform: translateX(24px);
-    }
-
     /* dropdown fix inside tables */
     .table-responsive { overflow: visible !important; }
-    .dropdown-menu {
-      position: absolute !important;
-      transform: translate3d(0,0,0) !important;
-      min-width: 140px;
-      font-size: 0.85rem;
-    }
 
   </style>
+  <?php include_once __DIR__ . '/../includes/table-styles.php'; ?>
 </head>
 <body>
 
@@ -226,7 +147,7 @@ if ($empRes && $empRes->num_rows > 0) {
 
 <!-- toast -->
 <div id="statusAlertWrapper"
-     class="position-fixed top-0 start-50 translate-middle-x p-3">
+  class="position-fixed start-50 translate-middle-x p-3">
   <div id="statusAlert"
        class="alert alert-success shadow-sm d-none align-items-center justify-content-between mb-0 text-center"
        role="alert">
@@ -241,7 +162,7 @@ if ($empRes && $empRes->num_rows > 0) {
   <div class="page-wrapper w-100">
 
     <!-- Top tabs row -->
-    <div class="d-flex justify-content-between align-items-center mb-4">
+    <div class="d-flex justify-content-center align-items-center gap-3 mb-4">
         <?php include_once __DIR__ . '/../includes/navbar-hr.php'; ?>
 
       <!-- Mark Attendance Modal -->
@@ -682,9 +603,7 @@ function initEmployeesListEvents() {
   const deleteButtons = document.querySelectorAll('.delete-employee');
   const deleteModalEl = document.getElementById('deleteConfirmModal');
 
-  if (!deleteModalEl) return; // agar employees_list load hi nahi hua
-
-  const deleteModal   = new bootstrap.Modal(deleteModalEl);
+  const deleteModal   = deleteModalEl ? new bootstrap.Modal(deleteModalEl) : null;
   let deleteId        = null;
 
   // STATUS TOGGLE AJAX
@@ -728,6 +647,7 @@ function initEmployeesListEvents() {
   deleteButtons.forEach(function (btn) {
     btn.addEventListener('click', function (e) {
       e.preventDefault();
+      if (!deleteModal) return;
       deleteId = this.dataset.id;
       deleteModal.show();
     });
@@ -736,6 +656,7 @@ function initEmployeesListEvents() {
   const confirmDeleteBtn = document.getElementById('confirmDeleteBtn');
   if (confirmDeleteBtn) {
     confirmDeleteBtn.addEventListener('click', function () {
+      if (!deleteModal) return;
       if (!deleteId) return;
       window.location.href = 'delete_employee.php?id=' + encodeURIComponent(deleteId);
     });
@@ -820,6 +741,399 @@ function initEmployeesListEvents() {
   }
 }
 
+// Attendance tab ke pagination/per-page ko init karne ka function
+function initAttendanceTabEvents() {
+  var meta = document.getElementById('attendancePagingMeta');
+  var perSel = document.getElementById('attendancePerPageFooter');
+  if (!meta || !perSel) return;
+
+  var month = meta.getAttribute('data-month') || '';
+  var year = meta.getAttribute('data-year') || '';
+  var page = parseInt(meta.getAttribute('data-page') || '1', 10) || 1;
+  var per = parseInt(meta.getAttribute('data-per-page') || '10', 10) || 10;
+
+  perSel.value = String(per);
+
+  function loadAttendancePage(p, perPage){
+    var tabBtn = document.querySelector('[data-page^="attendance_tab.php"]');
+    var url = 'attendance_tab.php?ajax=1'
+      + '&month=' + encodeURIComponent(month)
+      + '&year=' + encodeURIComponent(year)
+      + '&page=' + encodeURIComponent(p)
+      + '&per_page=' + encodeURIComponent(perPage);
+    loadPage(url, tabBtn);
+  }
+
+  perSel.onchange = function(){
+    var newPer = parseInt(this.value || '10', 10) || 10;
+    loadAttendancePage(1, newPer);
+  };
+
+  document.querySelectorAll('.att-page-link').forEach(function(a){
+    a.addEventListener('click', function(e){
+      e.preventDefault();
+      var p = parseInt(this.dataset.page || '1', 10) || 1;
+      var currentPer = parseInt(perSel.value || '10', 10) || 10;
+      loadAttendancePage(p, currentPer);
+    });
+  });
+}
+
+function initLeavesTabEvents() {
+  var meta = document.getElementById('leavesPagingMeta');
+  var perSel = document.getElementById('leavesPerPageFooter');
+  if (!meta || !perSel) return;
+
+  var page = parseInt(meta.getAttribute('data-page') || '1', 10) || 1;
+  var per = parseInt(meta.getAttribute('data-per-page') || '10', 10) || 10;
+  perSel.value = String(per);
+
+  function loadLeavesPage(p, perPage){
+    var tabBtn = document.querySelector('[data-page^="leaves_tab.php"]');
+    var url = 'leaves_tab.php?ajax=1'
+      + '&page=' + encodeURIComponent(p)
+      + '&per_page=' + encodeURIComponent(perPage);
+    loadPage(url, tabBtn);
+  }
+
+  perSel.onchange = function(){
+    var newPer = parseInt(this.value || '10', 10) || 10;
+    loadLeavesPage(1, newPer);
+  };
+
+  document.querySelectorAll('.leaves-page-link').forEach(function(a){
+    a.addEventListener('click', function(e){
+      e.preventDefault();
+      var p = parseInt(this.dataset.page || '1', 10) || 1;
+      var currentPer = parseInt(perSel.value || '10', 10) || 10;
+      loadLeavesPage(p, currentPer);
+    });
+  });
+
+  // Apply Leave modal
+  var openBtn = document.getElementById('openApplyLeaveModal');
+  var modalEl = document.getElementById('applyLeaveModal');
+  var formEl = document.getElementById('applyLeaveForm');
+  var submitBtn = document.getElementById('applyLeaveSubmitBtn');
+  if (openBtn && modalEl && typeof bootstrap !== 'undefined') {
+    if (openBtn.dataset.bound !== '1') {
+      openBtn.dataset.bound = '1';
+      openBtn.addEventListener('click', function(){
+        var modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+        modal.show();
+      });
+    }
+  }
+
+  if (formEl) {
+    if (formEl.dataset.bound !== '1') {
+      formEl.dataset.bound = '1';
+      formEl.addEventListener('submit', function(e){
+        e.preventDefault();
+
+        if (submitBtn) submitBtn.disabled = true;
+        showLoader();
+
+        fetch('apply_leave_hr.php?ajax=1', {
+          method: 'POST',
+          body: new FormData(formEl)
+        })
+        .then(function(res){ return res.json(); })
+        .then(function(data){
+          if (data && data.success) {
+            try {
+              if (modalEl && typeof bootstrap !== 'undefined') {
+                var modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+                modal.hide();
+              }
+            } catch (e) {}
+
+            // Reset form for next time
+            try { formEl.reset(); } catch (e) {}
+
+            showStatus(data.message || 'Leave applied.', 'success');
+            var currentPage = parseInt(meta.getAttribute('data-page') || '1', 10) || 1;
+            var currentPer = parseInt(perSel.value || '10', 10) || 10;
+            loadLeavesPage(currentPage, currentPer);
+          } else {
+            showStatus((data && data.message) ? data.message : 'Failed to apply leave.', 'danger');
+          }
+        })
+        .catch(function(){
+          showStatus('Failed to apply leave.', 'danger');
+        })
+        .finally(function(){
+          if (submitBtn) submitBtn.disabled = false;
+          hideLoader();
+        });
+      });
+    }
+  }
+}
+
+function initDepartmentsTabEvents() {
+  var meta = document.getElementById('departmentsPagingMeta');
+  var perSel = document.getElementById('departmentsPerPageFooter');
+  if (!meta || !perSel) return;
+
+  var page = parseInt(meta.getAttribute('data-page') || '1', 10) || 1;
+  var per = parseInt(meta.getAttribute('data-per-page') || '10', 10) || 10;
+  perSel.value = String(per);
+
+  function loadDepartmentsPage(p, perPage){
+    var tabBtn = document.querySelector('[data-page^="departments.php"]');
+    var url = 'departments.php?ajax=1'
+      + '&page=' + encodeURIComponent(p)
+      + '&per_page=' + encodeURIComponent(perPage);
+    loadPage(url, tabBtn);
+  }
+
+  perSel.onchange = function(){
+    var newPer = parseInt(this.value || '10', 10) || 10;
+    loadDepartmentsPage(1, newPer);
+  };
+
+  document.querySelectorAll('.departments-page-link').forEach(function(a){
+    a.addEventListener('click', function(e){
+      e.preventDefault();
+      var p = parseInt(this.dataset.page || '1', 10) || 1;
+      var currentPer = parseInt(perSel.value || '10', 10) || 10;
+      loadDepartmentsPage(p, currentPer);
+    });
+  });
+
+  // Modal open/reset + auto-open on edit
+  var openBtn = document.getElementById('openDepartmentModal');
+  var modalEl = document.getElementById('departmentModal');
+  var modalMeta = document.getElementById('departmentsModalMeta');
+  if (openBtn && modalEl && !openBtn.dataset.bound) {
+    openBtn.dataset.bound = '1';
+    openBtn.addEventListener('click', function(){
+      var form = document.getElementById('departmentModalForm');
+      if (form) {
+        var idInput = form.querySelector('input[name="id"]');
+        var nameInput = form.querySelector('input[name="department_name"]');
+        if (idInput) idInput.value = '';
+        if (nameInput) nameInput.value = '';
+      }
+      var title = document.getElementById('departmentModalTitle');
+      if (title) title.textContent = 'Add Department';
+      var modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+      modal.show();
+    });
+  }
+  if (modalEl && modalMeta && modalMeta.getAttribute('data-open') === '1') {
+    var modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+    modal.show();
+  }
+}
+
+function initDesignationsTabEvents() {
+  var meta = document.getElementById('designationsPagingMeta');
+  var perSel = document.getElementById('designationsPerPageFooter');
+  if (!meta || !perSel) return;
+
+  var page = parseInt(meta.getAttribute('data-page') || '1', 10) || 1;
+  var per = parseInt(meta.getAttribute('data-per-page') || '10', 10) || 10;
+  perSel.value = String(per);
+
+  function loadDesignationsPage(p, perPage){
+    var tabBtn = document.querySelector('[data-page^="designations.php"]');
+    var url = 'designations.php?ajax=1'
+      + '&page=' + encodeURIComponent(p)
+      + '&per_page=' + encodeURIComponent(perPage);
+    loadPage(url, tabBtn);
+  }
+
+  perSel.onchange = function(){
+    var newPer = parseInt(this.value || '10', 10) || 10;
+    loadDesignationsPage(1, newPer);
+  };
+
+  document.querySelectorAll('.designations-page-link').forEach(function(a){
+    a.addEventListener('click', function(e){
+      e.preventDefault();
+      var p = parseInt(this.dataset.page || '1', 10) || 1;
+      var currentPer = parseInt(perSel.value || '10', 10) || 10;
+      loadDesignationsPage(p, currentPer);
+    });
+  });
+
+  // Modal open/reset + auto-open on edit
+  var openBtn = document.getElementById('openDesignationModal');
+  var modalEl = document.getElementById('designationModal');
+  var modalMeta = document.getElementById('designationsModalMeta');
+  if (openBtn && modalEl && !openBtn.dataset.bound) {
+    openBtn.dataset.bound = '1';
+    openBtn.addEventListener('click', function(){
+      var form = document.getElementById('designationModalForm');
+      if (form) {
+        var idInput = form.querySelector('input[name="id"]');
+        var nameInput = form.querySelector('input[name="designation_name"]');
+        var deptSelect = form.querySelector('select[name="department_id"]');
+        if (idInput) idInput.value = '';
+        if (nameInput) nameInput.value = '';
+        if (deptSelect) deptSelect.value = '';
+      }
+      var title = document.getElementById('designationModalTitle');
+      if (title) title.textContent = 'Add Designation';
+      var modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+      modal.show();
+    });
+  }
+  if (modalEl && modalMeta && modalMeta.getAttribute('data-open') === '1') {
+    var modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+    modal.show();
+  }
+}
+
+function initHolidaysTabEvents() {
+  var meta = document.getElementById('holidaysPagingMeta');
+  var perSel = document.getElementById('holidaysPerPageFooter');
+  if (!meta || !perSel) return;
+
+  var page = parseInt(meta.getAttribute('data-page') || '1', 10) || 1;
+  var per = parseInt(meta.getAttribute('data-per-page') || '10', 10) || 10;
+  perSel.value = String(per);
+
+  function loadHolidaysPage(p, perPage){
+    var tabBtn = document.querySelector('[data-page^="holidays.php"]');
+    var url = 'holidays.php?ajax=1'
+      + '&page=' + encodeURIComponent(p)
+      + '&per_page=' + encodeURIComponent(perPage);
+    loadPage(url, tabBtn);
+  }
+
+  perSel.onchange = function(){
+    var newPer = parseInt(this.value || '10', 10) || 10;
+    loadHolidaysPage(1, newPer);
+  };
+
+  document.querySelectorAll('.holidays-page-link').forEach(function(a){
+    a.addEventListener('click', function(e){
+      e.preventDefault();
+      var p = parseInt(this.dataset.page || '1', 10) || 1;
+      var currentPer = parseInt(perSel.value || '10', 10) || 10;
+      loadHolidaysPage(p, currentPer);
+    });
+  });
+
+  // Modal open/reset + auto-open on edit
+  var openBtn = document.getElementById('openHolidayModal');
+  var modalEl = document.getElementById('holidayModal');
+  var modalMeta = document.getElementById('holidaysModalMeta');
+  if (openBtn && modalEl && !openBtn.dataset.bound) {
+    openBtn.dataset.bound = '1';
+    openBtn.addEventListener('click', function(){
+      var form = document.getElementById('holidayModalForm');
+      if (form) {
+        var idInput = form.querySelector('input[name="id"]');
+        var nameInput = form.querySelector('input[name="holiday_name"]');
+        var dateInput = form.querySelector('input[name="holiday_date"]');
+        if (idInput) idInput.value = '';
+        if (nameInput) nameInput.value = '';
+        if (dateInput) dateInput.value = '';
+      }
+      var title = document.getElementById('holidayModalTitle');
+      if (title) title.textContent = 'Add Holiday';
+      var modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+      modal.show();
+    });
+  }
+  if (modalEl && modalMeta && modalMeta.getAttribute('data-open') === '1') {
+    var modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+    modal.show();
+  }
+}
+
+function initShiftRosterTabEvents() {
+  var meta = document.getElementById('shiftRosterMeta');
+  if (!meta) return;
+
+  var view = meta.getAttribute('data-view') || 'week';
+  var start = meta.getAttribute('data-start') || '';
+
+  var weekBtn = document.getElementById('shiftRosterWeekBtn');
+  var monthBtn = document.getElementById('shiftRosterMonthBtn');
+  var prevBtn = document.getElementById('shiftRosterPrev');
+  var nextBtn = document.getElementById('shiftRosterNext');
+
+  function setActiveViewButtons() {
+    if (weekBtn) weekBtn.classList.toggle('active', view === 'week');
+    if (monthBtn) monthBtn.classList.toggle('active', view === 'month');
+  }
+  setActiveViewButtons();
+
+  function toISODate(d) {
+    var y = d.getFullYear();
+    var m = String(d.getMonth() + 1).padStart(2, '0');
+    var day = String(d.getDate()).padStart(2, '0');
+    return y + '-' + m + '-' + day;
+  }
+
+  function loadRoster(newView, newStart) {
+    var tabBtn = document.querySelector('[data-page^="shift_roster.php"]');
+    var url = 'shift_roster.php?ajax=1'
+      + '&view=' + encodeURIComponent(newView)
+      + '&start=' + encodeURIComponent(newStart);
+    loadPage(url, tabBtn);
+  }
+
+  function parseStartDate() {
+    if (!start) return new Date();
+    // Force local date parsing
+    var parts = String(start).split('-');
+    if (parts.length !== 3) return new Date();
+    return new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+  }
+
+  if (weekBtn && !weekBtn.dataset.bound) {
+    weekBtn.dataset.bound = '1';
+    weekBtn.addEventListener('click', function(){
+      view = 'week';
+      setActiveViewButtons();
+      loadRoster('week', start || toISODate(new Date()));
+    });
+  }
+
+  if (monthBtn && !monthBtn.dataset.bound) {
+    monthBtn.dataset.bound = '1';
+    monthBtn.addEventListener('click', function(){
+      view = 'month';
+      setActiveViewButtons();
+      loadRoster('month', start || toISODate(new Date()));
+    });
+  }
+
+  if (prevBtn && !prevBtn.dataset.bound) {
+    prevBtn.dataset.bound = '1';
+    prevBtn.addEventListener('click', function(){
+      var d = parseStartDate();
+      if (view === 'month') {
+        d.setMonth(d.getMonth() - 1);
+        d.setDate(1);
+      } else {
+        d.setDate(d.getDate() - 7);
+      }
+      loadRoster(view, toISODate(d));
+    });
+  }
+
+  if (nextBtn && !nextBtn.dataset.bound) {
+    nextBtn.dataset.bound = '1';
+    nextBtn.addEventListener('click', function(){
+      var d = parseStartDate();
+      if (view === 'month') {
+        d.setMonth(d.getMonth() + 1);
+        d.setDate(1);
+      } else {
+        d.setDate(d.getDate() + 7);
+      }
+      loadRoster(view, toISODate(d));
+    });
+  }
+}
+
 // generic AJAX loader with animation
 function loadPage(page, button) {
   const contentArea = document.getElementById("contentArea");
@@ -853,8 +1167,18 @@ function loadPage(page, button) {
       if (page.startsWith('employees_list.php')) {
         initEmployeesListEvents();
         initShiftTimePicker(); // also enable time picker for Mark Attendance modal
-      } else if (page.startsWith('shifts.php')) {
-        initShiftTimePicker();
+      } else if (page.startsWith('attendance_tab.php')) {
+        initAttendanceTabEvents();
+      } else if (page.startsWith('leaves_tab.php')) {
+        initLeavesTabEvents();
+      } else if (page.startsWith('departments.php')) {
+        initDepartmentsTabEvents();
+      } else if (page.startsWith('designations.php')) {
+        initDesignationsTabEvents();
+      } else if (page.startsWith('holidays.php')) {
+        initHolidaysTabEvents();
+      } else if (page.startsWith('shift_roster.php')) {
+        initShiftRosterTabEvents();
       }
     })
     .catch(err => {
@@ -1216,35 +1540,6 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 });
 
-document.addEventListener("submit", function (e) {
-    const form = e.target;
-
-    // Only intercept Department AJAX form
-    if (form.closest("#contentArea") && form.action.includes("departments.php")) {
-        e.preventDefault();
-
-        const formData = new FormData(form);
-        const url = form.action + "?ajax=1";
-
-        showLoader();
-
-        fetch(url, {
-            method: "POST",
-            body: formData
-        })
-        .then(res => res.json())
-        .then(data => {
-            if (data.success) {
-                loadPage(data.reload, document.querySelector('[data-page="departments.php?ajax=1"]'));
-                showStatus("Department saved", "success");
-            }
-        })
-        .catch(() => showStatus("Error saving department", "danger"))
-        .finally(hideLoader);
-
-    }
-});
-
 document.addEventListener("click", function (e) {
     if (e.target.classList.contains("dept-edit")) {
         const id = e.target.dataset.editId;
@@ -1286,6 +1581,13 @@ document.addEventListener("submit", function (e) {
   if (form.action.includes("departments.php")) {
     e.preventDefault();
 
+    // close modal if open
+    const deptModalEl = document.getElementById('departmentModal');
+    if (deptModalEl) {
+      const m = bootstrap.Modal.getInstance(deptModalEl);
+      if (m) m.hide();
+    }
+
     const formData = new FormData(form);
     const url = "departments.php?ajax=1";
 
@@ -1312,6 +1614,13 @@ document.addEventListener("submit", function (e) {
   if (form.action.includes("designations.php")) {
     e.preventDefault();
 
+    // close modal if open
+    const desigModalEl = document.getElementById('designationModal');
+    if (desigModalEl) {
+      const m = bootstrap.Modal.getInstance(desigModalEl);
+      if (m) m.hide();
+    }
+
     const formData = new FormData(form);
     const url = "designations.php?ajax=1";
 
@@ -1333,20 +1642,20 @@ document.addEventListener("submit", function (e) {
 
     return;
   }
-});
 
-document.addEventListener("submit", function (e) {
-  const form = e.target;
-
-  // sirf SPA contentArea ke andar wale form intercept karo
-  if (!form.closest("#contentArea")) return;
-
-  // SHIFTS form
-  if (form.action.includes("shifts.php")) {
+  // HOLIDAYS form
+  if (form.action.includes("holidays.php")) {
     e.preventDefault();
 
+    // close modal if open
+    const holModalEl = document.getElementById('holidayModal');
+    if (holModalEl) {
+      const m = bootstrap.Modal.getInstance(holModalEl);
+      if (m) m.hide();
+    }
+
     const formData = new FormData(form);
-    const url = "shifts.php?ajax=1";
+    const url = "holidays.php?ajax=1";
 
     showLoader();
     fetch(url, {
@@ -1356,50 +1665,15 @@ document.addEventListener("submit", function (e) {
     .then(res => res.json())
     .then(data => {
       if (data.success) {
-        const tabBtn = document.querySelector('[data-page="shifts.php?ajax=1"]');
+        const tabBtn = document.querySelector('[data-page="holidays.php?ajax=1"]');
         loadPage(data.reload, tabBtn);
-        showStatus("Shift saved successfully.", "success");
-      } else if (data.errors) {
-        showStatus(data.errors.join(" "), "danger");
+        showStatus("Holiday saved successfully.", "success");
       }
     })
-    .catch(() => showStatus("Error saving shift", "danger"))
+    .catch(() => showStatus("Error saving holiday", "danger"))
     .finally(hideLoader);
 
     return;
-  }
-});
-
-document.addEventListener("click", function (e) {
-  const editBtn = e.target.closest(".shift-edit");
-  if (editBtn) {
-    e.preventDefault();
-    const id = editBtn.dataset.editId;
-    const tabBtn = document.querySelector('[data-page="shifts.php?ajax=1"]');
-    loadPage("shifts.php?ajax=1&edit=" + encodeURIComponent(id), tabBtn);
-    return;
-  }
-
-  const delBtn = e.target.closest(".shift-delete");
-  if (delBtn) {
-    e.preventDefault();
-    const id = delBtn.dataset.delId;
-    if (!confirm("Delete this shift?")) return;
-
-    showLoader();
-    fetch("shifts.php?ajax=1&delete=" + encodeURIComponent(id))
-      .then(res => res.json())
-      .then(data => {
-        if (data.success) {
-          const tabBtn = document.querySelector('[data-page="shifts.php?ajax=1"]');
-          loadPage(data.reload, tabBtn);
-          showStatus("Shift deleted successfully.", "success");
-        } else {
-          showStatus("Failed to delete shift.", "danger");
-        }
-      })
-      .catch(() => showStatus("Failed to delete shift.", "danger"))
-      .finally(hideLoader);
   }
 });
 

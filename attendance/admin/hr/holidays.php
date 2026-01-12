@@ -83,64 +83,41 @@ if (isset($_GET['edit'])) {
 }
 
 // List holidays ordered by date
-$list = $con->query("
-    SELECT * 
-    FROM holidays 
-    ORDER BY holiday_date DESC
-");
+$page = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
+$per_page = isset($_GET['per_page']) ? max(1, (int)$_GET['per_page']) : 10;
+if ($per_page > 100) $per_page = 100;
+$offset = ($page - 1) * $per_page;
+
+$totalCount = 0;
+$countRes = $con->query("SELECT COUNT(*) AS c FROM holidays");
+if ($countRes && $countRes->num_rows) {
+  $r = $countRes->fetch_assoc();
+  $totalCount = (int)($r['c'] ?? 0);
+}
+
+$list = $con->query(
+    "SELECT * FROM holidays ORDER BY holiday_date DESC LIMIT " . (int)$offset . "," . (int)$per_page
+);
 
 // --------- Common render function ----------
-function renderHolidaysContent($editRow, $list, $isAjax) {
+function renderHolidaysContent($editRow, $list, $isAjax, $totalCount, $page, $per_page, $offset) {
 ?>
   <div class="d-flex justify-content-between align-items-center mb-3">
     <h3 class="mb-0">Holidays</h3>
-  </div>
-
-  <!-- ADD / EDIT FORM -->
-  <div class="card mb-4">
-    <div class="card-header">
-      <?php echo $editRow ? 'Edit Holiday' : 'Add Holiday'; ?>
-    </div>
-    <div class="card-body">
-      <form method="POST" action="holidays.php" id="holidayForm">
-        <input type="hidden" name="id" value="<?php echo $editRow['id'] ?? ''; ?>">
-
-        <div class="mb-3">
-          <label class="form-label">Holiday Name</label>
-          <input type="text"
-                 name="holiday_name"
-                 class="form-control"
-                 required
-                 placeholder="e.g., New Year, Diwali, Christmas"
-                 value="<?php echo htmlspecialchars($editRow['holiday_name'] ?? ''); ?>">
-        </div>
-
-        <div class="mb-3">
-          <label class="form-label">Holiday Date</label>
-          <input type="date"
-                 name="holiday_date"
-                 class="form-control"
-                 required
-                 value="<?php echo $editRow['holiday_date'] ?? ''; ?>">
-        </div>
-
-        <button type="submit" class="btn btn-dark">
-          <?php echo $editRow ? 'Update' : 'Save'; ?>
-        </button>
-        <?php if ($editRow) { ?>
-          <a href="holidays.php" class="btn btn-secondary ms-2">Cancel</a>
-        <?php } ?>
-      </form>
-    </div>
+    <button type="button" class="btn btn-dark" id="openHolidayModal">Add Holiday</button>
   </div>
 
   <!-- LIST TABLE -->
-  <div class="card">
-    <div class="card-header">Holiday List</div>
+  <div class="card card-main">
+    <div class="card-header card-main-header d-flex justify-content-between align-items-center">
+      <span class="fw-semibold">Holiday List</span>
+      <small class="text-muted">Total: <?php echo (int)$totalCount; ?></small>
+    </div>
     <div class="card-body p-0">
-      <table class="table table-striped mb-0">
-        <thead class="table-light">
-          <tr>
+      <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead>
+          <tr class="text-nowrap">
             <th>#</th>
             <th>Holiday Name</th>
             <th>Date</th>
@@ -150,13 +127,13 @@ function renderHolidaysContent($editRow, $list, $isAjax) {
         </thead>
         <tbody>
         <?php
-        $i = 1;
+        $i = $totalCount > 0 ? ($offset + 1) : 1;
         if ($list && $list->num_rows > 0) {
           while ($row = $list->fetch_assoc()) {
             $dayName = date('l', strtotime($row['holiday_date']));
             $dateFormatted = date('d-m-Y', strtotime($row['holiday_date']));
           ?>
-          <tr>
+          <tr class="text-nowrap">
             <td><?php echo $i++; ?></td>
             <td><?php echo htmlspecialchars($row['holiday_name']); ?></td>
             <td><?php echo $dateFormatted; ?></td>
@@ -193,28 +170,102 @@ function renderHolidaysContent($editRow, $list, $isAjax) {
         <?php } ?>
         </tbody>
       </table>
+      </div>
+
+      <div id="holidaysPagingMeta"
+           data-page="<?php echo (int)$page; ?>"
+           data-per-page="<?php echo (int)$per_page; ?>"
+           style="display:none;"></div>
+
+      <?php
+        $totalPages = max(1, (int)ceil(($totalCount ?: 0) / max(1, $per_page)));
+        $startRec = $totalCount > 0 ? ($offset + 1) : 0;
+        $endRec = $totalCount > 0 ? ($offset + ($list ? $list->num_rows : 0)) : 0;
+      ?>
+
+      <?php if ($totalPages > 1): ?>
+        <nav class="mt-3 px-2">
+          <ul class="pagination mb-0">
+            <?php
+              $start = max(1, $page - 3);
+              $end = min($totalPages, $page + 3);
+              if ($page > 1) echo '<li class="page-item"><a href="#" class="page-link holidays-page-link" data-page="'.($page-1).'">Previous</a></li>';
+              if ($start > 1) echo '<li class="page-item"><a href="#" class="page-link holidays-page-link" data-page="1">1</a></li>' . ($start>2 ? '<li class="page-item disabled"><span class="page-link">...</span></li>':'' );
+              for ($p = $start; $p <= $end; $p++){
+                $cls = $p == $page ? ' page-item active' : ' page-item';
+                echo '<li class="'.$cls.'"><a href="#" class="page-link holidays-page-link" data-page="'.$p.'">'.$p.'</a></li>';
+              }
+              if ($end < $totalPages) echo ($end < $totalPages-1 ? '<li class="page-item disabled"><span class="page-link">...</span></li>':'') . '<li class="page-item"><a href="#" class="page-link holidays-page-link" data-page="'.$totalPages.'">'.$totalPages.'</a></li>';
+              if ($page < $totalPages) echo '<li class="page-item"><a href="#" class="page-link holidays-page-link" data-page="'.($page+1).'">Next</a></li>';
+            ?>
+          </ul>
+        </nav>
+      <?php endif; ?>
+
+      <div class="d-flex justify-content-between align-items-center mt-2 px-2 pb-2">
+        <div class="small text-muted">Record <?php echo (int)$startRec; ?>–<?php echo (int)$endRec; ?> of <?php echo (int)$totalCount; ?></div>
+        <div class="d-flex align-items-center gap-2">
+          <label class="small text-muted mb-0">Rows:</label>
+          <select id="holidaysPerPageFooter" class="form-select form-select-sm" style="width:80px;">
+            <option value="10" <?php if($per_page==10) echo 'selected'; ?>>10</option>
+            <option value="25" <?php if($per_page==25) echo 'selected'; ?>>25</option>
+            <option value="50" <?php if($per_page==50) echo 'selected'; ?>>50</option>
+            <option value="100" <?php if($per_page==100) echo 'selected'; ?>>100</option>
+          </select>
+        </div>
+      </div>
     </div>
   </div>
 
-  <?php if ($isAjax) { ?>
-  <script>
-  // Handle edit button clicks in AJAX mode
-  document.addEventListener('DOMContentLoaded', function() {
-    document.querySelectorAll('.holiday-edit').forEach(function(btn) {
-      btn.addEventListener('click', function() {
-        const id = this.getAttribute('data-edit-id');
-        loadPage('holidays.php?ajax=1&edit=' + id);
-      });
-    });
-  });
-  </script>
-  <?php } ?>
+  <div id="holidaysModalMeta" data-open="<?php echo $editRow ? '1' : '0'; ?>" style="display:none;"></div>
+
+  <!-- Add/Edit Holiday Modal -->
+  <div class="modal fade" id="holidayModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="holidayModalTitle"><?php echo $editRow ? 'Edit Holiday' : 'Add Holiday'; ?></h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <form method="POST" action="holidays.php" id="holidayModalForm">
+            <input type="hidden" name="id" value="<?php echo $editRow['id'] ?? ''; ?>">
+
+            <div class="mb-3">
+              <label class="form-label">Holiday Name</label>
+              <input type="text"
+                     name="holiday_name"
+                     class="form-control"
+                     required
+                     placeholder="e.g., New Year, Diwali, Christmas"
+                     value="<?php echo htmlspecialchars($editRow['holiday_name'] ?? ''); ?>">
+            </div>
+
+            <div class="mb-3">
+              <label class="form-label">Holiday Date</label>
+              <input type="date"
+                     name="holiday_date"
+                     class="form-control"
+                     required
+                     value="<?php echo $editRow['holiday_date'] ?? ''; ?>">
+            </div>
+
+            <div class="d-flex justify-content-end gap-2">
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+              <button type="submit" class="btn btn-dark"><?php echo $editRow ? 'Update' : 'Save'; ?></button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
 <?php
 } // end renderHolidaysContent
 
 // ---------- AJAX request -> sirf inner content ----------
 if ($isAjax) {
-    renderHolidaysContent($editRow, $list, $isAjax);
+  renderHolidaysContent($editRow, $list, $isAjax, $totalCount, $page, $per_page, $offset);
     exit;
 }
 
@@ -229,7 +280,7 @@ if ($isAjax) {
 </head>
 <body>
 <div class="container py-4">
-  <?php renderHolidaysContent($editRow, $list, $isAjax); ?>
+  <?php renderHolidaysContent($editRow, $list, $isAjax, $totalCount, $page, $per_page, $offset); ?>
 </div>
 </body>
 </html>

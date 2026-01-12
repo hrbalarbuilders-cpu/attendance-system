@@ -57,6 +57,15 @@ if ($empRes && $empRes->num_rows > 0) {
     }
 }
 
+/* ---------- Pagination (Employees rows) ---------- */
+$page = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
+$per_page = isset($_GET['per_page']) ? max(1, (int)$_GET['per_page']) : 10;
+if ($per_page > 100) $per_page = 100;
+$offset = ($page - 1) * $per_page;
+
+$totalEmployees = count($employees);
+$employeesPage = array_slice($employees, $offset, $per_page);
+
 /* ---------- Fetch Holidays for this month ---------- */
 $holidaysMap = []; // [date] = holiday_name (e.g., ['2025-12-25' => 'Christmas'])
 $startDate = sprintf('%04d-%02d-01', $year, $month);
@@ -653,8 +662,8 @@ body { background:#f5f6f8; font-family: Arial, sans-serif; }
                 </thead>
 
                 <tbody>
-                <?php if (!empty($employees)): ?>
-                    <?php foreach ($employees as $emp): 
+                <?php if (!empty($employeesPage)): ?>
+                    <?php foreach ($employeesPage as $emp): 
                         $empId        = (int)$emp['id'];
                         $presentCount = 0;
                     ?>
@@ -739,7 +748,7 @@ body { background:#f5f6f8; font-family: Arial, sans-serif; }
 
                     </tr>
                     <?php endforeach; ?>
-                <?php else: ?>
+                                <?php else: ?>
                     <tr>
                         <td colspan="<?php echo $totalDays + 2; ?>" class="text-center py-4 text-muted">
                             No employees found.
@@ -750,6 +759,51 @@ body { background:#f5f6f8; font-family: Arial, sans-serif; }
             </table>
 
         </div>
+
+                <?php
+                    $attTotalPages = max(1, (int)ceil($totalEmployees / max(1, $per_page)));
+                    $attStartRec = $totalEmployees > 0 ? ($offset + 1) : 0;
+                    $attEndRec = $totalEmployees > 0 ? ($offset + count($employeesPage)) : 0;
+                ?>
+
+                <div id="attendancePagingMeta"
+                         data-month="<?php echo (int)$month; ?>"
+                         data-year="<?php echo (int)$year; ?>"
+                         data-page="<?php echo (int)$page; ?>"
+                         data-per-page="<?php echo (int)$per_page; ?>"
+                         style="display:none;"></div>
+
+                <?php if ($attTotalPages > 1): ?>
+                    <nav class="mt-3 px-2">
+                        <ul class="pagination mb-0">
+                            <?php
+                                $start = max(1, $page - 3);
+                                $end = min($attTotalPages, $page + 3);
+                                if ($page > 1) echo '<li class="page-item"><a href="#" class="page-link att-page-link" data-page="'.($page-1).'">Previous</a></li>';
+                                if ($start > 1) echo '<li class="page-item"><a href="#" class="page-link att-page-link" data-page="1">1</a></li>' . ($start>2 ? '<li class="page-item disabled"><span class="page-link">...</span></li>':'' );
+                                for ($p = $start; $p <= $end; $p++){
+                                    $cls = $p == $page ? ' page-item active' : ' page-item';
+                                    echo '<li class="'.$cls.'"><a href="#" class="page-link att-page-link" data-page="'.$p.'">'.$p.'</a></li>';
+                                }
+                                if ($end < $attTotalPages) echo ($end < $attTotalPages-1 ? '<li class="page-item disabled"><span class="page-link">...</span></li>':'') . '<li class="page-item"><a href="#" class="page-link att-page-link" data-page="'.$attTotalPages.'">'.$attTotalPages.'</a></li>';
+                                if ($page < $attTotalPages) echo '<li class="page-item"><a href="#" class="page-link att-page-link" data-page="'.($page+1).'">Next</a></li>';
+                            ?>
+                        </ul>
+                    </nav>
+                <?php endif; ?>
+
+                <div class="d-flex justify-content-between align-items-center mt-2 px-2 pb-2">
+                    <div class="small text-muted">Record <?php echo $attStartRec; ?>–<?php echo $attEndRec; ?> of <?php echo (int)$totalEmployees; ?></div>
+                    <div class="d-flex align-items-center gap-2">
+                        <label class="small text-muted mb-0">Rows:</label>
+                        <select id="attendancePerPageFooter" class="form-select form-select-sm" style="width:80px;">
+                            <option value="10" <?php if($per_page==10) echo 'selected'; ?>>10</option>
+                            <option value="25" <?php if($per_page==25) echo 'selected'; ?>>25</option>
+                            <option value="50" <?php if($per_page==50) echo 'selected'; ?>>50</option>
+                            <option value="100" <?php if($per_page==100) echo 'selected'; ?>>100</option>
+                        </select>
+                    </div>
+                </div>
     </div>
 
 </div>

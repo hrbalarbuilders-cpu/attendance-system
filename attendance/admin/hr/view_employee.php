@@ -35,7 +35,7 @@ if (!$employee) {
             <h2 class="mb-1 fw-bold">Employee Profile</h2>
             <div class="text-muted">Detailed employee information</div>
         </div>
-        <a href="employees.php" class="btn btn-outline-secondary">&larr; Back to Employees</a>
+        <a href="employees.php" class="btn btn-outline-secondary">&larr; Back to HR</a>
     </div>
     <div class="row justify-content-center">
         <div class="col-lg-8 col-xl-7">

@@ -8,11 +8,39 @@
   </div>
   <div class="card card-main">
     <div class="card-header card-main-header d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2">
-      <div class="d-flex align-items-center gap-3 w-100">
-        <div class="w-100" style="max-width:300px;">
+      <div class="d-flex align-items-center gap-3">
+        <div style="min-width:200px; max-width:300px;">
           <input type="search" id="employeeSearch" class="form-control form-control-sm" placeholder="Search employees..." value="<?php echo isset($q) ? htmlspecialchars($q) : ''; ?>">
         </div>
-        <small class="text-muted ms-2">Total: <?php echo isset($totalCount) ? (int)$totalCount : ($result ? (int)$result->num_rows : 0); ?></small>
+        <small class="text-muted">Total: <?php echo isset($totalCount) ? (int)$totalCount : ($result ? (int)$result->num_rows : 0); ?></small>
+      </div>
+      <div class="d-flex align-items-center gap-2">
+        <button type="button" class="btn btn-dark btn-sm d-flex align-items-center gap-2" id="importBtn">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+            <path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/>
+            <path d="M7.646 1.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1-.708.708L8.5 2.707V11.5a.5.5 0 0 1-1 0V2.707L5.354 4.854a.5.5 0 1 1-.708-.708l3-3z"/>
+          </svg>
+          Import
+        </button>
+        <button type="button" class="btn btn-dark btn-sm d-flex align-items-center gap-2" id="exportBtn">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+            <path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/>
+            <path d="M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293V1.5a.5.5 0 0 0-1 0v8.793L5.354 8.146a.5.5 0 1 0-.708.708l3 3z"/>
+          </svg>
+          Export
+        </button>
+        <label class="switch-icon mb-0">
+          <input type="checkbox" id="archiveToggle">
+          <span class="slider-icon">
+            <svg class="icon-filter" xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" viewBox="0 0 16 16">
+              <path d="M6 10.5a.5.5 0 0 1 .5-.5h3a.5.5 0 0 1 0 1h-3a.5.5 0 0 1-.5-.5zm-2-3a.5.5 0 0 1 .5-.5h7a.5.5 0 0 1 0 1h-7a.5.5 0 0 1-.5-.5zm-2-3a.5.5 0 0 1 .5-.5h11a.5.5 0 0 1 0 1h-11a.5.5 0 0 1-.5-.5z"/>
+            </svg>
+            <svg class="icon-trash" xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" viewBox="0 0 16 16">
+              <path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/>
+              <path fill-rule="evenodd" d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/>
+            </svg>
+          </span>
+        </label>
       </div>
     </div>
     <div class="table-responsive">
@@ -45,21 +73,25 @@
             $updatedTs = $row['updated_at'] ?? $row['created_at'] ?? null;
             $updated   = $updatedTs ? date('d M Y, h:i A', strtotime($updatedTs)) : '-';
         ?>
-          <tr class="text-nowrap">
-            <td><?php echo $offset + $i++; ?></td>
-            <td><?php echo htmlspecialchars($row['emp_code'] ?? ''); ?></td>
-            <td>
+          <tr>
+            <td data-label="#"><?php echo $offset + $i++; ?></td>
+            <td data-label="Emp Code"><?php echo htmlspecialchars($row['emp_code'] ?? ''); ?></td>
+            <td data-label="Name">
               <div class="fw-semibold"><?php echo htmlspecialchars($row['name'] ?? ''); ?></div>
               <div class="small text-muted">Updated: <?php echo $updated; ?></div>
             </td>
-            <td><?php echo htmlspecialchars($department); ?></td>
-            <td><?php echo htmlspecialchars($shiftName); ?></td>
-            <td>
-              <span class="badge bg-<?php echo $isActive ? 'success' : 'secondary'; ?>">
-                <?php echo $isActive ? 'Active' : 'Inactive'; ?>
-              </span>
+            <td data-label="Department"><?php echo htmlspecialchars($department); ?></td>
+            <td data-label="Shift"><?php echo htmlspecialchars($shiftName); ?></td>
+            <td data-label="Status">
+              <label class="switch mb-0" title="Enable/Disable">
+                <input type="checkbox"
+                       class="status-toggle"
+                       data-id="<?php echo (int)$row['id']; ?>"
+                       <?php echo $isActive ? 'checked' : ''; ?>>
+                <span class="slider"></span>
+              </label>
             </td>
-            <td>
+            <td data-label="Action">
               <div class="dropdown">
                 <button class="btn btn-sm btn-light border-0 px-2 py-1 d-flex align-items-center justify-content-center" type="button" id="actionMenu<?php echo $row['id']; ?>" data-bs-toggle="dropdown" aria-expanded="false" style="box-shadow:none;">
                   <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" fill="currentColor" class="bi bi-three-dots-vertical text-secondary" viewBox="0 0 16 16">

@@ -28,7 +28,7 @@
 .modal-dialog { margin-top: 8vh; }
 .lead-modal .form-label { font-weight: 600; }
 .input-add-btn { cursor:pointer; font-size:1.05rem; }
-.lead-modal .modal-body { overflow: auto; -webkit-overflow-scrolling: touch; flex: 1 1 auto; }
+.lead-modal .modal-body { flex: 1 1 auto; }
 
 /* Ensure Select2 dropdown appears above Bootstrap modal/backdrop */
 .select2-container--open {
@@ -37,7 +37,7 @@
 </style>
 
 <div class="modal fade" id="leadModal" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg modal-fullscreen-sm-down">
+  <div class="modal-dialog modal-dialog-centered modal-lg modal-fullscreen-sm-down">
     <form id="leadForm" class="modal-content lead-modal p-0">
       <div class="modal-header border-0">
         <h5 class="modal-title">Add / Edit Lead</h5>

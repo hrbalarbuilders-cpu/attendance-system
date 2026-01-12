@@ -5,6 +5,8 @@
 date_default_timezone_set('Asia/Kolkata');
 include '../config/db.php';
 
+$isAjax = isset($_GET['ajax']) && $_GET['ajax'] == '1';
+
 $errors = [];
 $success = '';
 
@@ -75,6 +77,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 if (isset($_GET['toggle'])) {
   $toggleId = (int)$_GET['toggle'];
   $con->query("UPDATE working_from_master SET is_active = 1 - is_active, updated_at = NOW() WHERE id = {$toggleId}");
+  if ($isAjax) { exit; }
   header('Location: working_from_settings.php');
   exit;
 }
@@ -83,12 +86,85 @@ if (isset($_GET['toggle'])) {
 if (isset($_GET['delete'])) {
   $delId = (int)$_GET['delete'];
   $con->query("DELETE FROM working_from_master WHERE id = {$delId}");
+  if ($isAjax) { exit; }
   header('Location: working_from_settings.php');
   exit;
 }
 
 // Fetch list
 $list = $con->query("SELECT * FROM working_from_master ORDER BY is_active DESC, label ASC");
+
+// --- AJAX mode: output only the content, no HTML shell ---
+if ($isAjax) {
+?>
+<style>
+  .actions-cell { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.25rem; }
+</style>
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <div>
+    <h3 class="mb-0">Working From</h3>
+    <div class="text-muted small">Manage working location options</div>
+  </div>
+  <button type="button" class="btn btn-dark btn-sm" id="openWorkingFromModal">+ Add Option</button>
+</div>
+<?php if ($success): ?>
+  <div class="alert alert-success"><?php echo htmlspecialchars($success); ?></div>
+<?php endif; ?>
+<?php if (!empty($errors)): ?>
+  <div class="alert alert-danger"><?php echo implode('<br>', array_map('htmlspecialchars', $errors)); ?></div>
+<?php endif; ?>
+<div class="card settings-card shadow-sm border-0" style="border-radius:18px;">
+  <div class="card-body">
+    <div class="table-responsive">
+      <table class="table table-hover table-borderless align-middle mb-0 w-100" style="font-size: 0.97rem;">
+        <thead class="table-light" style="font-size:0.93em;">
+          <tr>
+            <th class="text-center px-2" style="width:50px;">#</th>
+            <th class="text-start px-2">Code</th>
+            <th class="text-start px-2">Label</th>
+            <th class="text-center px-2" style="width:80px;">Status</th>
+            <th class="text-center px-2" style="width:140px;">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+        <?php if ($list && $list->num_rows > 0): ?>
+          <?php $i = 1; while ($row = $list->fetch_assoc()): ?>
+            <tr>
+              <td class="text-center"><?php echo $i++; ?></td>
+              <td class="text-start"><?php echo htmlspecialchars($row['code']); ?></td>
+              <td class="text-start"><?php echo htmlspecialchars($row['label']); ?></td>
+              <td class="text-center">
+                <?php if ((int)$row['is_active'] === 1): ?>
+                  <span class="badge bg-success">Active</span>
+                <?php else: ?>
+                  <span class="badge bg-secondary">Inactive</span>
+                <?php endif; ?>
+              </td>
+              <td class="text-center actions-cell">
+                <button type="button" class="btn btn-sm btn-outline-primary edit-working-from-btn"
+                  data-id="<?php echo (int)$row['id']; ?>"
+                  data-code="<?php echo htmlspecialchars($row['code']); ?>"
+                  data-label="<?php echo htmlspecialchars($row['label']); ?>"
+                >Edit</button>
+                <button type="button" class="btn btn-sm btn-outline-warning working-from-toggle" data-id="<?php echo (int)$row['id']; ?>">Toggle</button>
+                <button type="button" class="btn btn-sm btn-outline-danger working-from-delete" data-id="<?php echo (int)$row['id']; ?>">Delete</button>
+              </td>
+            </tr>
+          <?php endwhile; ?>
+        <?php else: ?>
+          <tr><td colspan="5" class="text-muted text-center py-3">No records found.</td></tr>
+        <?php endif; ?>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<?php include '../includes/modal-working-from.php'; ?>
+<?php
+  exit;
+}
+// --- END AJAX mode ---
 
 ?>
 <!DOCTYPE html>

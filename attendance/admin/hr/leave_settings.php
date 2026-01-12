@@ -3,6 +3,8 @@
 date_default_timezone_set('Asia/Kolkata');
 include '../config/db.php';
 
+$isAjax = isset($_GET['ajax']) && $_GET['ajax'] == '1';
+
 // Ensure leave_types table exists
 $tableCheck = $con->query("SHOW TABLES LIKE 'leave_types'");
 if (!$tableCheck || $tableCheck->num_rows == 0) {
@@ -89,6 +91,95 @@ if (isset($_GET['edit'])) {
 
 // List
 $list = $con->query("SELECT * FROM leave_types ORDER BY name ASC");
+
+// --- AJAX mode: output only the content, no HTML shell ---
+if ($isAjax) {
+?>
+<style>
+	.color-dot { width: 18px; height: 18px; border-radius: 999px; border:1px solid #e5e7eb; display:inline-block; }
+	.actions-cell { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.25rem; }
+</style>
+<div class="d-flex justify-content-between align-items-center mb-3">
+	<div>
+		<h3 class="mb-0">Leave Types</h3>
+		<div class="text-muted small">Create and manage leave types</div>
+	</div>
+	<button type="button" class="btn btn-dark btn-sm" id="openLeaveTypeModal">+ Add Leave Type</button>
+</div>
+<?php if ($successMsg): ?>
+	<div class="alert alert-success"><?php echo htmlspecialchars($successMsg); ?></div>
+<?php endif; ?>
+<?php if ($errorMsg): ?>
+	<div class="alert alert-danger"><?php echo htmlspecialchars($errorMsg); ?></div>
+<?php endif; ?>
+<div class="card settings-card shadow-sm border-0" style="border-radius:18px;">
+	<div class="card-body">
+		<div class="table-responsive">
+			<table class="table table-hover table-borderless align-middle mb-0 w-100" style="font-size: 0.97rem;">
+				<thead class="table-light" style="font-size:0.93em;">
+					<tr>
+						<th class="text-center px-2" style="width:32px;">#</th>
+						<th class="text-start px-2">Code</th>
+						<th class="text-start px-2">Name</th>
+						<th class="text-center px-2">Yearly</th>
+						<th class="text-center px-2">Monthly</th>
+						<th class="text-center px-2">Color</th>
+						<th class="text-center px-2">Unused</th>
+						<th class="text-center px-2">Status</th>
+						<th class="text-center px-2">Actions</th>
+					</tr>
+				</thead>
+				<tbody>
+				<?php if ($list && $list->num_rows > 0): ?>
+					<?php $i = 1; while ($row = $list->fetch_assoc()): ?>
+						<tr>
+							<td class="text-center"><?php echo $i++; ?></td>
+							<td class="text-start"><?php echo htmlspecialchars($row['code']); ?></td>
+							<td class="text-start"><?php echo htmlspecialchars($row['name']); ?></td>
+							<td class="text-center"><?php echo (int)$row['yearly_quota']; ?></td>
+							<td class="text-center"><?php echo $row['monthly_limit'] !== null ? (int)$row['monthly_limit'] : '-'; ?></td>
+							<td class="text-center"><span class="color-dot" style="background: <?php echo htmlspecialchars($row['color_hex'] ?: '#111827'); ?>;"></span></td>
+							<td class="text-center"><?php
+								$labelMap = ['carry_forward' => 'Carry Forward', 'encash' => 'Encash', 'lapse' => 'Lapsed'];
+								echo htmlspecialchars($labelMap[$row['unused_action']] ?? 'Lapsed');
+							?></td>
+							<td class="text-center">
+								<?php if ((int)$row['is_active'] === 1): ?>
+									<span class="badge bg-success">Active</span>
+								<?php else: ?>
+									<span class="badge bg-secondary">Inactive</span>
+								<?php endif; ?>
+							</td>
+							<td class="text-center actions-cell">
+								<button type="button" class="btn btn-sm btn-outline-primary edit-leave-type-btn"
+									data-id="<?php echo (int)$row['id']; ?>"
+									data-code="<?php echo htmlspecialchars($row['code']); ?>"
+									data-name="<?php echo htmlspecialchars($row['name']); ?>"
+									data-yearly="<?php echo (int)$row['yearly_quota']; ?>"
+									data-monthly="<?php echo $row['monthly_limit'] !== null ? (int)$row['monthly_limit'] : ''; ?>"
+									data-color="<?php echo htmlspecialchars($row['color_hex'] ?: '#111827'); ?>"
+									data-unused="<?php echo htmlspecialchars($row['unused_action'] ?? 'lapse'); ?>"
+								>Edit</button>
+								<a href="leave_assign.php?leave_id=<?php echo (int)$row['id']; ?>" class="btn btn-sm btn-outline-secondary">Assign</a>
+								<button type="button" class="btn btn-sm btn-outline-warning leave-type-toggle" data-id="<?php echo (int)$row['id']; ?>">Toggle</button>
+								<button type="button" class="btn btn-sm btn-outline-danger leave-type-delete" data-id="<?php echo (int)$row['id']; ?>">Delete</button>
+							</td>
+						</tr>
+					<?php endwhile; ?>
+				<?php else: ?>
+					<tr><td colspan="9" class="text-muted text-center py-3">No leave types defined yet.</td></tr>
+				<?php endif; ?>
+				</tbody>
+			</table>
+		</div>
+	</div>
+</div>
+
+<?php include '../includes/modal-leave-type.php'; ?>
+<?php
+	exit;
+}
+// --- END AJAX mode ---
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -118,10 +209,12 @@ $list = $con->query("SELECT * FROM leave_types ORDER BY name ASC");
 <div class="container py-4 d-flex justify-content-center">
 	<div class="page-wrapper w-100">
 
-		<div class="d-flex justify-content-between align-items-center mb-3">
-			<h1 class="section-title mb-0">Leave Settings</h1>
-			<a href="settings.php" class="btn btn-outline-secondary">← Back to Settings</a>
-		</div>
+		   <div class="d-flex justify-content-between align-items-center mb-3">
+			   <h1 class="section-title mb-0">Leave Settings</h1>
+			   <button type="button" class="btn btn-dark" data-bs-toggle="modal" data-bs-target="#leaveTypeModal">
+				   <?php echo $editRow ? 'Edit Leave Type' : 'Add Leave Type'; ?>
+			   </button>
+		   </div>
 
 		<?php if ($successMsg): ?>
 			<div class="alert alert-success"><?php echo htmlspecialchars($successMsg); ?></div>
@@ -131,90 +224,26 @@ $list = $con->query("SELECT * FROM leave_types ORDER BY name ASC");
 		<?php endif; ?>
 
 		<div class="row g-3">
-			<div class="col-md-4">
-				<div class="card settings-card h-100">
-					<div class="card-body">
-						<h5 class="card-title mb-3"><?php echo $editRow ? 'Edit Leave Type' : 'Add Leave Type'; ?></h5>
-						<form method="POST">
-							<input type="hidden" name="id" value="<?php echo $editRow['id'] ?? 0; ?>">
-
-							<div class="mb-2">
-								<label class="form-label small">Code</label>
-								<input type="text" name="code" class="form-control form-control-sm" placeholder="CL, PL, SL" required
-											 value="<?php echo htmlspecialchars($editRow['code'] ?? ''); ?>">
-							</div>
-
-							<div class="mb-2">
-								<label class="form-label small">Name</label>
-								<input type="text" name="name" class="form-control form-control-sm" placeholder="Casual Leave" required
-											 value="<?php echo htmlspecialchars($editRow['name'] ?? ''); ?>">
-							</div>
-
-							<div class="mb-2">
-								<label class="form-label small">Yearly Quota (days)</label>
-								<input type="number" name="yearly_quota" class="form-control form-control-sm" min="0"
-											 value="<?php echo htmlspecialchars($editRow['yearly_quota'] ?? 0); ?>">
-							</div>
-
-							<div class="mb-2">
-								<label class="form-label small">Monthly Limit (optional)</label>
-								<input type="number" name="monthly_limit" class="form-control form-control-sm" min="0"
-											 value="<?php echo isset($editRow['monthly_limit']) ? htmlspecialchars($editRow['monthly_limit']) : ''; ?>">
-								<div class="form-text small">Leave days allowed per month (leave blank for no limit).</div>
-							</div>
-
-							<div class="mb-2">
-								<label class="form-label small">Color</label>
-								<input type="color" name="color_hex" class="form-control form-control-sm form-control-color"
-											 value="<?php echo htmlspecialchars($editRow['color_hex'] ?? '#111827'); ?>">
-							</div>
-
-							<div class="mb-2">
-								<label class="form-label small">Unused Leave Action</label>
-								<select name="unused_action" class="form-select form-select-sm">
-									<?php
-									$ua = $editRow['unused_action'] ?? 'lapse';
-									$options = [
-										'carry_forward' => 'Carry Forward',
-										'encash'        => 'Encash',
-										'lapse'         => 'Lapsed',
-									];
-									foreach ($options as $val => $label) {
-											$sel = ($ua === $val) ? 'selected' : '';
-											echo '<option value="'.$val.'" '.$sel.'>'.$label.'</option>';
-									}
-									?>
-								</select>
-							</div>
-
-							<button type="submit" class="btn btn-sm btn-dark w-100">
-								<?php echo $editRow ? 'Update Leave Type' : 'Save Leave Type'; ?>
-							</button>
-						</form>
-					</div>
-				</div>
-			</div>
-
-			<div class="col-md-8">
-				<div class="card settings-card h-100">
-					<div class="card-body">
+			<div class="col-12">
+				<div class="card settings-card h-100 w-100 shadow-sm border-0" style="width:100%; border-radius:18px;">
+					<div class="card-body" style="width:100%;">
 						<h5 class="card-title mb-3">Existing Leave Types</h5>
-						<div class="table-responsive">
-							<table class="table table-sm align-middle mb-0">
-								<thead>
-									<tr>
-											<th class="text-center" style="width:40px;">#</th>
-											<th class="text-start">Code</th>
-											<th class="text-start">Name</th>
-											<th class="text-center">Yearly</th>
-											<th class="text-center">Monthly</th>
-											<th class="text-center" style="width:70px;">Color</th>
-											<th class="text-center">Unused Action</th>
-											<th class="text-center" style="width:80px;">Status</th>
-											<th class="text-center" style="width:180px;">Actions</th>
-									</tr>
-								</thead>
-								<tbody>
+						<div class="table-responsive" style="width:100%;">
+							<table class="table table-hover table-borderless align-middle mb-0 w-100" style="font-size: 0.97rem; border-radius:14px; overflow:hidden; background:#fff; width: 100%;">
+							   <thead class="table-light" style="font-size:0.93em;">
+								   <tr style="border-top:none;">
+									   <th class="text-center px-2" style="width:32px;">#</th>
+									   <th class="text-start px-2" style="width:60px;">Code</th>
+									   <th class="text-start px-2" style="min-width:120px;">Name</th>
+									   <th class="text-center px-2" style="width:60px;">Yearly</th>
+									   <th class="text-center px-2" style="width:60px;">Monthly</th>
+									   <th class="text-center px-2" style="width:50px;">Color</th>
+									   <th class="text-center px-2" style="width:90px;">Unused</th>
+									   <th class="text-center px-2" style="width:60px;">Status</th>
+									   <th class="text-center px-2" style="width:140px;">Actions</th>
+								   </tr>
+							   </thead>
+							   <tbody>
 								<?php if ($list && $list->num_rows > 0): ?>
 									<?php $i = 1; while ($row = $list->fetch_assoc()): ?>
 										<tr>
@@ -244,7 +273,15 @@ $list = $con->query("SELECT * FROM leave_types ORDER BY name ASC");
 												<?php endif; ?>
 											</td>
 											<td class="text-center actions-cell">
-												<a href="leave_settings.php?edit=<?php echo (int)$row['id']; ?>" class="btn btn-sm btn-outline-primary">Edit</a>
+														<button type="button" class="btn btn-sm btn-outline-primary edit-leave-type-btn"
+															data-id="<?php echo (int)$row['id']; ?>"
+															data-code="<?php echo htmlspecialchars($row['code']); ?>"
+															data-name="<?php echo htmlspecialchars($row['name']); ?>"
+															data-yearly="<?php echo (int)$row['yearly_quota']; ?>"
+															data-monthly="<?php echo $row['monthly_limit'] !== null ? (int)$row['monthly_limit'] : ''; ?>"
+															data-color="<?php echo htmlspecialchars($row['color_hex'] ?: '#111827'); ?>"
+															data-unused="<?php echo htmlspecialchars($row['unused_action'] ?? 'lapse'); ?>"
+														>Edit</button>
 												<a href="leave_assign.php?leave_id=<?php echo (int)$row['id']; ?>" class="btn btn-sm btn-outline-secondary">Assign</a>
 												<a href="leave_settings.php?toggle=<?php echo (int)$row['id']; ?>" class="btn btn-sm btn-outline-warning">Toggle</a>
 												<a href="leave_settings.php?delete=<?php echo (int)$row['id']; ?>" class="btn btn-sm btn-outline-danger"
@@ -267,6 +304,45 @@ $list = $con->query("SELECT * FROM leave_types ORDER BY name ASC");
 
 	</div>
 </div>
+
+<?php include '../includes/modal-leave-type.php'; ?>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  var modal = document.getElementById('leaveTypeModal');
+  var bsModal = new bootstrap.Modal(modal);
+
+  // Edit button click: populate modal and open
+  document.querySelectorAll('.edit-leave-type-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      modal.querySelector('[name="id"]').value = btn.dataset.id;
+      modal.querySelector('[name="code"]').value = btn.dataset.code;
+      modal.querySelector('[name="name"]').value = btn.dataset.name;
+      modal.querySelector('[name="yearly_quota"]').value = btn.dataset.yearly;
+      modal.querySelector('[name="monthly_limit"]').value = btn.dataset.monthly;
+      modal.querySelector('[name="color_hex"]').value = btn.dataset.color;
+      modal.querySelector('[name="unused_action"]').value = btn.dataset.unused;
+      modal.querySelector('.modal-title').textContent = 'Edit Leave Type';
+      modal.querySelector('button[type="submit"]').textContent = 'Update Leave Type';
+      bsModal.show();
+    });
+  });
+
+  // Reset modal on close (for Add mode)
+  modal.addEventListener('hidden.bs.modal', function() {
+    modal.querySelector('[name="id"]').value = '0';
+    modal.querySelector('[name="code"]').value = '';
+    modal.querySelector('[name="name"]').value = '';
+    modal.querySelector('[name="yearly_quota"]').value = '0';
+    modal.querySelector('[name="monthly_limit"]').value = '';
+    modal.querySelector('[name="color_hex"]').value = '#111827';
+    modal.querySelector('[name="unused_action"]').value = 'lapse';
+    modal.querySelector('.modal-title').textContent = 'Add Leave Type';
+    modal.querySelector('button[type="submit"]').textContent = 'Add Leave Type';
+  });
+});
+</script>
 
 </body>
 </html>

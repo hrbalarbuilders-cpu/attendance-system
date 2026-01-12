@@ -56,48 +56,41 @@ if (isset($_GET['edit'])) {
 }
 
 // List data
-$list = $con->query("SELECT * FROM departments ORDER BY department_name ASC");
+$page = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
+$per_page = isset($_GET['per_page']) ? max(1, (int)$_GET['per_page']) : 10;
+if ($per_page > 100) $per_page = 100;
+$offset = ($page - 1) * $per_page;
+
+$totalCount = 0;
+$countRes = $con->query("SELECT COUNT(*) AS c FROM departments");
+if ($countRes && $countRes->num_rows) {
+  $r = $countRes->fetch_assoc();
+  $totalCount = (int)($r['c'] ?? 0);
+}
+
+$list = $con->query(
+  "SELECT * FROM departments ORDER BY department_name ASC LIMIT " . (int)$offset . "," . (int)$per_page
+);
 
 // ---------- Common content rendering function ----------
-function renderDepartmentsContent($editDept, $list) {
+function renderDepartmentsContent($editDept, $list, $totalCount, $page, $per_page, $offset) {
 ?>
   <div class="d-flex justify-content-between align-items-center mb-3">
     <h3 class="mb-0">Departments</h3>
-  </div>
-
-  <!-- ADD / EDIT FORM -->
-  <div class="card mb-4">
-    <div class="card-header">
-      <?php echo $editDept ? 'Edit Department' : 'Add Department'; ?>
-    </div>
-    <div class="card-body">
-      <form method="POST" action="departments.php">
-        <input type="hidden" name="id" value="<?php echo $editDept['id'] ?? ''; ?>">
-        <div class="mb-3">
-          <label class="form-label">Department Name</label>
-          <input type="text"
-                 name="department_name"
-                 class="form-control"
-                 required
-                 value="<?php echo htmlspecialchars($editDept['department_name'] ?? ''); ?>">
-        </div>
-        <button type="submit" class="btn btn-dark">
-          <?php echo $editDept ? 'Update' : 'Save'; ?>
-        </button>
-        <?php if ($editDept) { ?>
-          <a href="departments.php" class="btn btn-secondary ms-2">Cancel</a>
-        <?php } ?>
-      </form>
-    </div>
+    <button type="button" class="btn btn-dark" id="openDepartmentModal">Add Department</button>
   </div>
 
   <!-- LIST TABLE -->
-  <div class="card">
-    <div class="card-header">Department List</div>
+  <div class="card card-main">
+    <div class="card-header card-main-header d-flex justify-content-between align-items-center">
+      <span class="fw-semibold">Department List</span>
+      <small class="text-muted">Total: <?php echo (int)$totalCount; ?></small>
+    </div>
     <div class="card-body p-0">
-      <table class="table table-striped mb-0">
-        <thead class="table-light">
-          <tr>
+      <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead>
+          <tr class="text-nowrap">
             <th>#</th>
             <th>Department Name</th>
             <th>Created</th>
@@ -106,16 +99,16 @@ function renderDepartmentsContent($editDept, $list) {
         </thead>
         <tbody>
         <?php
-        $i = 1;
+        $i = $totalCount > 0 ? ($offset + 1) : 1;
         if ($list && $list->num_rows > 0) {
           while ($row = $list->fetch_assoc()) { ?>
-          <tr>
+          <tr class="text-nowrap">
             <td><?php echo $i++; ?></td>
             <td><?php echo htmlspecialchars($row['department_name']); ?></td>
             <td>
               <?php
                 echo !empty($row['created_at'])
-                  ? date('d-m-Y', strtotime($row['created_at']))
+                  ? date('d M Y, h:i A', strtotime($row['created_at']))
                   : '-';
               ?>
             </td>
@@ -143,6 +136,81 @@ function renderDepartmentsContent($editDept, $list) {
         <?php } ?>
         </tbody>
       </table>
+      </div>
+
+      <div id="departmentsPagingMeta"
+           data-page="<?php echo (int)$page; ?>"
+           data-per-page="<?php echo (int)$per_page; ?>"
+           style="display:none;"></div>
+
+      <?php
+        $totalPages = max(1, (int)ceil(($totalCount ?: 0) / max(1, $per_page)));
+        $startRec = $totalCount > 0 ? ($offset + 1) : 0;
+        $endRec = $totalCount > 0 ? ($offset + ($list ? $list->num_rows : 0)) : 0;
+      ?>
+
+      <?php if ($totalPages > 1): ?>
+        <nav class="mt-3 px-2">
+          <ul class="pagination mb-0">
+            <?php
+              $start = max(1, $page - 3);
+              $end = min($totalPages, $page + 3);
+              if ($page > 1) echo '<li class="page-item"><a href="#" class="page-link departments-page-link" data-page="'.($page-1).'">Previous</a></li>';
+              if ($start > 1) echo '<li class="page-item"><a href="#" class="page-link departments-page-link" data-page="1">1</a></li>' . ($start>2 ? '<li class="page-item disabled"><span class="page-link">...</span></li>':'' );
+              for ($p = $start; $p <= $end; $p++){
+                $cls = $p == $page ? ' page-item active' : ' page-item';
+                echo '<li class="'.$cls.'"><a href="#" class="page-link departments-page-link" data-page="'.$p.'">'.$p.'</a></li>';
+              }
+              if ($end < $totalPages) echo ($end < $totalPages-1 ? '<li class="page-item disabled"><span class="page-link">...</span></li>':'') . '<li class="page-item"><a href="#" class="page-link departments-page-link" data-page="'.$totalPages.'">'.$totalPages.'</a></li>';
+              if ($page < $totalPages) echo '<li class="page-item"><a href="#" class="page-link departments-page-link" data-page="'.($page+1).'">Next</a></li>';
+            ?>
+          </ul>
+        </nav>
+      <?php endif; ?>
+
+      <div class="d-flex justify-content-between align-items-center mt-2 px-2 pb-2">
+        <div class="small text-muted">Record <?php echo (int)$startRec; ?>–<?php echo (int)$endRec; ?> of <?php echo (int)$totalCount; ?></div>
+        <div class="d-flex align-items-center gap-2">
+          <label class="small text-muted mb-0">Rows:</label>
+          <select id="departmentsPerPageFooter" class="form-select form-select-sm" style="width:80px;">
+            <option value="10" <?php if($per_page==10) echo 'selected'; ?>>10</option>
+            <option value="25" <?php if($per_page==25) echo 'selected'; ?>>25</option>
+            <option value="50" <?php if($per_page==50) echo 'selected'; ?>>50</option>
+            <option value="100" <?php if($per_page==100) echo 'selected'; ?>>100</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="departmentsModalMeta" data-open="<?php echo $editDept ? '1' : '0'; ?>" style="display:none;"></div>
+
+  <!-- Add/Edit Department Modal -->
+  <div class="modal fade" id="departmentModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="departmentModalTitle"><?php echo $editDept ? 'Edit Department' : 'Add Department'; ?></h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <form method="POST" action="departments.php" id="departmentModalForm">
+            <input type="hidden" name="id" value="<?php echo $editDept['id'] ?? ''; ?>">
+            <div class="mb-3">
+              <label class="form-label">Department Name</label>
+              <input type="text"
+                     name="department_name"
+                     class="form-control"
+                     required
+                     value="<?php echo htmlspecialchars($editDept['department_name'] ?? ''); ?>">
+            </div>
+            <div class="d-flex justify-content-end gap-2">
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+              <button type="submit" class="btn btn-dark"><?php echo $editDept ? 'Update' : 'Save'; ?></button>
+            </div>
+          </form>
+        </div>
+      </div>
     </div>
   </div>
 <?php
@@ -151,7 +219,7 @@ function renderDepartmentsContent($editDept, $list) {
 // ---------- If AJAX: sirf inner content bhejo, no HTML wrapper ----------
 if ($isAjax) {
     // employees.php already loaded Bootstrap & body etc., so yaha sirf inner content
-    renderDepartmentsContent($editDept, $list);
+  renderDepartmentsContent($editDept, $list, $totalCount, $page, $per_page, $offset);
     exit;
 }
 
@@ -166,7 +234,7 @@ if ($isAjax) {
 </head>
 <body>
 <div class="container py-4">
-  <?php renderDepartmentsContent($editDept, $list); ?>
+  <?php renderDepartmentsContent($editDept, $list, $totalCount, $page, $per_page, $offset); ?>
 </div>
 </body>
 </html>

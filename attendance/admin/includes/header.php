@@ -1,3 +1,10 @@
+<?php
+if (session_status() === PHP_SESSION_NONE) {
+    @session_start();
+}
+$isLoggedIn = isset($_SESSION['emp_id']) && $_SESSION['emp_id'] > 0;
+$loggedInName = isset($_SESSION['emp_name']) ? $_SESSION['emp_name'] : '';
+?>
 <!-- Global Header with Apps Dropdown -->
 <style>
   .header-fixed {
@@ -185,7 +192,12 @@ if ($adminPos !== false) {
     </svg>
     Apps
   </button>
-  <a href="developer_login.php" class="btn btn-warning me-2">🔒 Login</a>
+  <?php if ($isLoggedIn): ?>
+    <span style="font-size:0.9rem;color:#64748b;">👤 <?php echo htmlspecialchars($loggedInName); ?></span>
+    <a href="<?php echo $base; ?>/logout.php" style="display:inline-block;padding:6px 14px;font-size:0.85rem;font-weight:500;color:#dc2626;background:#fff;border:1px solid #dc2626;border-radius:6px;text-decoration:none;transition:all 0.2s;" onmouseover="this.style.background='#dc2626';this.style.color='#fff';" onmouseout="this.style.background='#fff';this.style.color='#dc2626';">🚪 Logout</a>
+  <?php else: ?>
+    <a href="<?php echo $base; ?>/login.php" style="display:inline-block;padding:6px 14px;font-size:0.85rem;font-weight:500;color:#fff;background:#f59e0b;border:1px solid #f59e0b;border-radius:6px;text-decoration:none;transition:all 0.2s;" onmouseover="this.style.background='#d97706';" onmouseout="this.style.background='#f59e0b';">🔒 Login</a>
+  <?php endif; ?>
   <span style="font-size:1.2rem;font-weight:600;color:#2563eb; margin-left:18px;">Setu Developers</span>
 </div>
 <!-- Apps Dropdown: must be outside header for absolute positioning -->
@@ -220,7 +232,7 @@ if ($adminPos !== false) {
       </div>
       <div class="app-name">Company</div>
     </div>
-    <div class="app-item" data-name="dashboard" data-href="<?php echo $base; ?>/index.php" data-enabled="1">
+    <div class="app-item" data-name="dashboard" data-href="<?php echo $base; ?>/dashboard/index.php" data-enabled="1">
       <div class="app-icon" style="background: #3b82f6;">
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <path d="M4 19V5" />
