@@ -3,18 +3,18 @@ date_default_timezone_set('Asia/Kolkata');
 include '../config/db.php';
 
 /* ---------- MONTH & YEAR (from GET) ---------- */
-$currentYear  = (int)date('Y');
-$currentMonth = (int)date('n');
+$currentYear = (int) date('Y');
+$currentMonth = (int) date('n');
 
-$year  = isset($_GET['year'])  ? (int)$_GET['year']  : $currentYear;
-$month = isset($_GET['month']) ? (int)$_GET['month'] : $currentMonth;
+$year = isset($_GET['year']) ? (int) $_GET['year'] : $currentYear;
+$month = isset($_GET['month']) ? (int) $_GET['month'] : $currentMonth;
 
-$monthName  = date('F Y', strtotime("$year-$month-01"));
-$totalDays  = cal_days_in_month(CAL_GREGORIAN, $month, $year);
+$monthName = date('F Y', strtotime("$year-$month-01"));
+$totalDays = cal_days_in_month(CAL_GREGORIAN, $month, $year);
 
 /* ---------- Fetch Employees (with emp_code, shift info, weekoff_days for mapping) ---------- */
 $empSql = "
-    SELECT e.id, e.emp_code, e.name, desig.designation_name, e.shift_id, e.weekoff_days,
+    SELECT e.user_id, e.emp_code, e.name, desig.designation_name, e.shift_id, e.weekoff_days,
            s.start_time, s.end_time, s.late_mark_after, s.half_day_after
     FROM employees e
     LEFT JOIN designations desig ON desig.id = e.designation_id
@@ -23,33 +23,29 @@ $empSql = "
 ";
 $empRes = $con->query($empSql);
 
-$employees      = [];
+$employees = [];
 $empByLogUserId = []; // key = attendance_logs.user_id, value = employee_id
-$empShifts      = []; // key = employee_id, value = shift data
-$empWeekOffs    = []; // key = employee_id, value = weekoff_days string
+$empShifts = []; // key = employee_id, value = shift data
+$empWeekOffs = []; // key = employee_id, value = weekoff_days string
 
 if ($empRes && $empRes->num_rows > 0) {
     while ($row = $empRes->fetch_assoc()) {
-        // Example: EMP001 -> 1
-        $num = (int) filter_var($row['emp_code'] ?? '', FILTER_SANITIZE_NUMBER_INT);
-        if ($num <= 0) {
-            $num = (int)$row['id']; // fallback
-        }
-        $row['log_user_id']    = $num;
-        $empId = (int)$row['id'];
-        $employees[]           = $row;
-        $empByLogUserId[$num]  = $empId;
-        
+        // Use actual Database Primary Key (user_id)
+        $empId = (int) $row['user_id'];
+        $row['log_user_id'] = $empId;
+        $employees[] = $row;
+        $empByLogUserId[$empId] = $empId;
+
         // Store shift info
         if ($row['shift_id']) {
             $empShifts[$empId] = [
                 'start_time' => $row['start_time'],
                 'end_time' => $row['end_time'],
-                'late_mark_after' => (int)($row['late_mark_after'] ?? 30), // minutes
-                'half_day_after' => (int)($row['half_day_after'] ?? 270) // minutes
+                'late_mark_after' => (int) ($row['late_mark_after'] ?? 30), // minutes
+                'half_day_after' => (int) ($row['half_day_after'] ?? 270) // minutes
             ];
         }
-        
+
         // Store weekoff days
         if (!empty($row['weekoff_days'])) {
             $empWeekOffs[$empId] = $row['weekoff_days']; // e.g., "Wednesday" or "Saturday,Sunday"
@@ -58,9 +54,10 @@ if ($empRes && $empRes->num_rows > 0) {
 }
 
 /* ---------- Pagination (Employees rows) ---------- */
-$page = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
-$per_page = isset($_GET['per_page']) ? max(1, (int)$_GET['per_page']) : 10;
-if ($per_page > 100) $per_page = 100;
+$page = isset($_GET['page']) ? max(1, (int) $_GET['page']) : 1;
+$per_page = isset($_GET['per_page']) ? max(1, (int) $_GET['per_page']) : 10;
+if ($per_page > 100)
+    $per_page = 100;
 $offset = ($page - 1) * $per_page;
 
 $totalEmployees = count($employees);
@@ -91,8 +88,8 @@ if ($tableCheck && $tableCheck->num_rows > 0) {
 $attendanceMap = []; // [employee_id][day] = ['logs'=>[], 'status'=>'P']
 
 if (!empty($empByLogUserId)) {
-    $startDateTime  = $startDate . ' 00:00:00';
-    $endDateTime    = $endDate   . ' 23:59:59';
+    $startDateTime = $startDate . ' 00:00:00';
+    $endDateTime = $endDate . ' 23:59:59';
 
     $logSql = "
         SELECT user_id, time, type, working_from, reason
@@ -106,22 +103,22 @@ if (!empty($empByLogUserId)) {
         $logsRes = $stmtLog->get_result();
 
         while ($log = $logsRes->fetch_assoc()) {
-            $logUserId = (int)$log['user_id'];
+            $logUserId = (int) $log['user_id'];
             if (!isset($empByLogUserId[$logUserId])) {
                 continue;
             }
 
             $empId = $empByLogUserId[$logUserId];
 
-            $ts  = strtotime($log['time']);
-            $day = (int)date('j', $ts); // 1..31
+            $ts = strtotime($log['time']);
+            $day = (int) date('j', $ts); // 1..31
 
             if (!isset($attendanceMap[$empId])) {
                 $attendanceMap[$empId] = [];
             }
             if (!isset($attendanceMap[$empId][$day])) {
                 $attendanceMap[$empId][$day] = [
-                    'logs'   => [],
+                    'logs' => [],
                     'status' => 'P', // ek bhi log hai to present
                 ];
             }
@@ -134,19 +131,30 @@ if (!empty($empByLogUserId)) {
 
 /* ---------- Month List ---------- */
 $monthNames = [
- 1=>'January',2=>'February',3=>'March',4=>'April',5=>'May',6=>'June',
- 7=>'July',8=>'August',9=>'September',10=>'October',11=>'November',12=>'December'
+    1 => 'January',
+    2 => 'February',
+    3 => 'March',
+    4 => 'April',
+    5 => 'May',
+    6 => 'June',
+    7 => 'July',
+    8 => 'August',
+    9 => 'September',
+    10 => 'October',
+    11 => 'November',
+    12 => 'December'
 ];
 
 /**
  * Format a minute count as hours/minutes (e.g., 130 -> "2h 10m", 45 -> "45m").
  */
-function formatMinutesAsHoursMinutes(int $minutes): string {
+function formatMinutesAsHoursMinutes(int $minutes): string
+{
     if ($minutes < 0) {
         $minutes = 0;
     }
     $hours = intdiv($minutes, 60);
-    $mins  = $minutes % 60;
+    $mins = $minutes % 60;
 
     if ($hours > 0 && $mins > 0) {
         return sprintf('%dh %dm', $hours, $mins);
@@ -158,11 +166,12 @@ function formatMinutesAsHoursMinutes(int $minutes): string {
 }
 
 /* ---------- Function to Determine Attendance Status ---------- */
-function determineAttendanceStatus($dayData, $date, $shiftInfo = null, $weekoffDays = null, $holidayName = null) {
+function determineAttendanceStatus($dayData, $date, $shiftInfo = null, $weekoffDays = null, $holidayName = null)
+{
     // Check if date is in the future
     $today = date('Y-m-d');
     $isFuture = strtotime($date) > strtotime($today);
-    
+
     // Check for Holiday FIRST (highest priority - overrides weekoff)
     if ($holidayName) {
         // If employee has logs on holiday, show as holiday with present indicator
@@ -184,7 +193,7 @@ function determineAttendanceStatus($dayData, $date, $shiftInfo = null, $weekoffD
         // No logs on holiday
         return ['status' => 'H', 'tooltip' => "Holiday: {$holidayName}"];
     }
-    
+
     // Check for Week Off (after holiday check) - this is the second priority
     if ($weekoffDays) {
         $dayName = date('l', strtotime($date)); // Full day name: Monday, Tuesday, etc.
@@ -210,7 +219,7 @@ function determineAttendanceStatus($dayData, $date, $shiftInfo = null, $weekoffD
             return ['status' => 'WO', 'tooltip' => 'Week Off'];
         }
     }
-    
+
     // If no logs, check if it's a future date
     if (!$dayData || empty($dayData['logs'])) {
         if ($isFuture) {
@@ -242,10 +251,10 @@ function determineAttendanceStatus($dayData, $date, $shiftInfo = null, $weekoffD
     }
 
     // Sort by time
-    usort($inLogs, function($a, $b) {
+    usort($inLogs, function ($a, $b) {
         return strtotime($a['time']) - strtotime($b['time']);
     });
-    usort($outLogs, function($a, $b) {
+    usort($outLogs, function ($a, $b) {
         return strtotime($a['time']) - strtotime($b['time']);
     });
 
@@ -254,25 +263,25 @@ function determineAttendanceStatus($dayData, $date, $shiftInfo = null, $weekoffD
 
     // Get reason from logs (ENUM: 'normal', 'lunch', 'tea')
     $reason = strtolower(trim($firstIn['reason'] ?? $lastOut['reason'] ?? 'normal'));
-    
+
     // Check reason field (based on actual ENUM values)
     // short_leave removed from system; keep for backward compatibility if old data exists
     if ($reason === 'short_leave') {
         return ['status' => 'N', 'tooltip' => 'Normal Day'];
     }
-    
+
     // office_leave removed; if any historical data exists, treat as Normal Day
     if ($reason === 'office_leave') {
         return ['status' => 'N', 'tooltip' => 'Normal Day'];
     }
-    
+
     // Check if clock out is missing
     if ($firstIn && !$lastOut) {
         // As soon as there is a first clock-in and no clock-out
         // show the "Didn't Clock Out" indicator in admin attendance.
         return ['status' => 'DCO', 'tooltip' => "Didn't Clock Out"];
     }
-    
+
     // Calculate times if shift info available
     if ($shiftInfo && $firstIn) {
         $clockInTime = strtotime($firstIn['time']);
@@ -280,7 +289,7 @@ function determineAttendanceStatus($dayData, $date, $shiftInfo = null, $weekoffD
         $shiftEnd = strtotime($date . ' ' . $shiftInfo['end_time']);
         $lateMarkAfter = $shiftInfo['late_mark_after']; // minutes
         $halfDayAfter = $shiftInfo['half_day_after']; // minutes
-        
+
         // Check for Late
         $lateThreshold = $shiftStart + ($lateMarkAfter * 60);
         if ($clockInTime > $lateThreshold) {
@@ -288,22 +297,22 @@ function determineAttendanceStatus($dayData, $date, $shiftInfo = null, $weekoffD
             $lateText = formatMinutesAsHoursMinutes($lateMinutes);
             return ['status' => 'L', 'tooltip' => "Late by {$lateText}"];
         }
-        
+
         // Check for Early Go (if clocked out before shift end)
         if ($lastOut) {
             $clockOutTime = strtotime($lastOut['time']);
             $earlyGoThreshold = $shiftEnd - (60 * 60); // 1 hour before shift end
-            
+
             if ($clockOutTime < $earlyGoThreshold) {
                 $earlyMinutes = round(($shiftEnd - $clockOutTime) / 60);
                 $earlyText = formatMinutesAsHoursMinutes($earlyMinutes);
                 return ['status' => 'EG', 'tooltip' => "Early Go by {$earlyText}"];
             }
-            
+
             // Check for half day (less than half_day_after minutes worked)
             // Exclude lunch/tea breaks from work duration
             $workDuration = ($clockOutTime - $clockInTime) / 60; // minutes
-            
+
             // If reason is lunch or tea, it's a break, not half day
             if ($reason !== 'lunch' && $reason !== 'tea' && $workDuration < $halfDayAfter) {
                 // Determine first or second half based on clock in time
@@ -316,9 +325,9 @@ function determineAttendanceStatus($dayData, $date, $shiftInfo = null, $weekoffD
             }
         }
     }
-    
+
     // No automatic weekend detection - weekends are only week off if set in weekoff_days
-    
+
     // Default: Present
     $tooltip = "Present ({$logCount} punches)";
     if ($firstIn && !empty($firstIn['working_from'])) {
@@ -327,216 +336,345 @@ function determineAttendanceStatus($dayData, $date, $shiftInfo = null, $weekoffD
     if ($reason && $reason !== 'normal') {
         $tooltip .= " · " . ucfirst(str_replace('_', ' ', $reason));
     }
-    
+
     return ['status' => 'P', 'tooltip' => $tooltip];
 }
 ?>
 
 <style>
-body { background:#f5f6f8; font-family: Arial, sans-serif; }
+    body {
+        background: #f5f6f8;
+        font-family: Arial, sans-serif;
+    }
 
-/* ---------- Header row (title + filters + add button) ---------- */
-.att-header-bar{
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 16px;
-    margin-bottom: 16px;
-    flex-wrap: wrap;
-}
-.att-header-right{
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    flex-wrap: wrap;
-}
+    /* ---------- Header row (title + filters + add button) ---------- */
+    .att-header-bar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 16px;
+        margin-bottom: 16px;
+        flex-wrap: wrap;
+    }
 
-/* Legend */
-.att-legend {
-    display:flex;
-    gap:12px;
-    flex-wrap:wrap;
-    margin-bottom:16px;
-    background:#fff;
-    padding:12px 16px;
-    border-radius:12px;
-    border:1px solid #e3e3e3;
-}
-.att-pill {
-    display:flex;
-    align-items:center;
-    gap:6px;
-    font-size:13px;
-    background:#f3f4f6;
-    border-radius:6px;
-    padding:4px 12px;
-}
-.att-pill-icon{
-    width:14px;height:14px;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    font-size:10px;
-}
-.att-pill-dot{
-    width:12px;height:12px;border-radius:50%;
-}
-.dot-present{background:#16a34a;}
-.dot-absent{background:#dc2626;}
-.dot-late{background:#2563eb;}
-.dot-earlygo{background:#ea580c;}
-.dot-holiday{background:#ec4899;}
-.dot-leave{background:#9333ea;}
-.dot-shortleave{background:#7c3aed;}
-.dot-weekoff{background:#06b6d4;}
-.dot-firsthalf{background:#f97316;}
-.dot-secondhalf{background:#f97316;}
-.dot-autoclockout{background:#6b7280;}
-.dot-didntclockout{background:#6b7280;}
+    .att-header-right {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+    }
 
-/* ---------- Filter Styling (Compact) ---------- */
-.att-filter-select {
-    border-radius: 8px !important;
-    padding: 4px 8px !important;
-    height: 36px !important;
-    font-size: 14px !important;
-}
-#attendanceFilterForm .btn {
-    height: 36px !important;
-    padding: 0px 18px !important;
-    font-size: 14px !important;
-    border-radius: 8px;
-}
+    /* Legend */
+    .att-legend {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+        margin-bottom: 16px;
+        background: #fff;
+        padding: 12px 16px;
+        border-radius: 12px;
+        border: 1px solid #e3e3e3;
+    }
 
-/* Add Attendance button */
-.att-add-btn{
-    border-radius: 8px;
-    font-weight: 600;
-    padding: 6px 20px;
-    font-size: 14px;
-}
+    .att-pill {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 13px;
+        background: #f3f4f6;
+        border-radius: 6px;
+        padding: 4px 12px;
+    }
 
-/* ---------- Card ---------- */
-.att-card {
-    background: #fff;
-    border-radius: 16px;
-    padding: 0;
-    border: 1px solid #e3e3e3;
-    overflow: hidden;
-}
+    .att-pill-icon {
+        width: 14px;
+        height: 14px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 10px;
+    }
 
-/* ---------- Scroll wrapper ---------- */
-.att-scroll-wrapper {
-    overflow-x: auto;
-    overflow-y: hidden;
-    padding-bottom: 5px;
-}
+    .att-pill-dot {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+    }
 
-.att-table {
-    width: max-content;
-    border-collapse: collapse;
-}
+    .dot-present {
+        background: #16a34a;
+    }
 
-/* Sticky employee & total columns */
-.att-sticky-left {
-    position: sticky;
-    left: 0;
-    background: #fff;
-    z-index: 10;
-}
-.att-sticky-right {
-    position: sticky;
-    right: 0;
-    background: #fff;
-    z-index: 10;
-}
+    .dot-absent {
+        background: #dc2626;
+    }
 
-/* Header */
-.att-table th {
-    text-align: center;
-    padding: 10px 6px;
-    background: #eef3fa;
-    border-bottom: 1px solid #d8dce2;
-    font-size: 13px;
-}
+    .dot-late {
+        background: #2563eb;
+    }
 
-/* Employee Row */
-.att-table td {
-    border-bottom: 1px solid #eee;
-    padding: 8px 6px;
-    text-align: center;
-}
+    .dot-earlygo {
+        background: #ea580c;
+    }
 
-/* Employee Layout */
-.emp-info {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-}
-.emp-avatar {
-    min-width: 40px;
-    height: 40px;
-    border-radius: 50%;
-    background: #111;
-    color: #fff;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-weight: 700;
-}
-.emp-details { line-height: 1.2; text-align: left; }
-.emp-name { font-weight: 600; font-size: 15px; }
-.emp-role { font-size: 12px; color:#6b7280; }
+    .dot-holiday {
+        background: #ec4899;
+    }
 
-/* Attendance Badges */
-.att-badge {
-    width: 30px; height: 30px;
-    border-radius: 50%;
-    font-size:12px;
-    font-weight:bold;
-    display:flex;
-    justify-content:center;
-    align-items:center;
-    margin:auto;
-    position:relative;
-    line-height:1;
-}
-.att-P { background:#dcfce7; color:#166534; }
-.att-A { background:#fee2e2; color:#b91c1c; }
-.att-L { background:#dbeafe; color:#1e40af; } /* Late */
-.att-EG { background:#fed7aa; color:#c2410c; } /* Early Go */
-.att-H { background:#fce7f3; color:#be185d; } /* Holiday */
-.att-LV { background:#f3e8ff; color:#6b21a8; } /* Leave */
-/* .att-SL kept only if any historical short_leave records exist */
-.att-SL { background:#ede9fe; color:#5b21b6; }
-.att-WO { background:#cffafe; color:#0e7490; } /* Week Off */
-.att-FH { background:#fed7aa; color:#c2410c; } /* First Half */
-.att-SH { background:#fed7aa; color:#c2410c; } /* Second Half */
-.att-ACO { background:#f3f4f6; color:#374151; } /* Auto Clock Out */
-.att-DCO { background:#f3f4f6; color:#374151; } /* Didn't Clock Out */
-.att-future { background:#ffffff; color:#9ca3af; border:1px solid #e5e7eb; } /* Future Date */
+    .dot-leave {
+        background: #9333ea;
+    }
 
-/* Tooltip */
-.att-cell-wrapper {
-    position: relative;
-}
-.att-tooltip {
-    display:none;
-    position:absolute;
-    top:-50px;
-    left:50%;
-    transform:translateX(-50%);
-    background:#fff;
-    padding:6px 12px;
-    border-radius:999px;
-    font-size:12px;
-    box-shadow:0px 6px 18px rgba(0,0,0,0.18);
-    white-space:nowrap;
-    z-index:20;
-}
-.att-cell-wrapper:hover .att-tooltip {
-    display:block;
-}
+    .dot-shortleave {
+        background: #7c3aed;
+    }
+
+    .dot-weekoff {
+        background: #06b6d4;
+    }
+
+    .dot-firsthalf {
+        background: #f97316;
+    }
+
+    .dot-secondhalf {
+        background: #f97316;
+    }
+
+    .dot-autoclockout {
+        background: #6b7280;
+    }
+
+    .dot-didntclockout {
+        background: #6b7280;
+    }
+
+    /* ---------- Filter Styling (Compact) ---------- */
+    .att-filter-select {
+        border-radius: 8px !important;
+        padding: 4px 8px !important;
+        height: 36px !important;
+        font-size: 14px !important;
+    }
+
+    #attendanceFilterForm .btn {
+        height: 36px !important;
+        padding: 0px 18px !important;
+        font-size: 14px !important;
+        border-radius: 8px;
+    }
+
+    /* Add Attendance button */
+    .att-add-btn {
+        border-radius: 8px;
+        font-weight: 600;
+        padding: 6px 20px;
+        font-size: 14px;
+    }
+
+    /* ---------- Card ---------- */
+    .att-card {
+        background: #fff;
+        border-radius: 16px;
+        padding: 0;
+        border: 1px solid #e3e3e3;
+        overflow: hidden;
+    }
+
+    /* ---------- Scroll wrapper ---------- */
+    .att-scroll-wrapper {
+        overflow-x: auto;
+        overflow-y: hidden;
+        padding-bottom: 5px;
+    }
+
+    .att-table {
+        width: max-content;
+        border-collapse: collapse;
+    }
+
+    /* Sticky employee & total columns */
+    .att-sticky-left {
+        position: sticky;
+        left: 0;
+        background: #fff;
+        z-index: 10;
+    }
+
+    .att-sticky-right {
+        position: sticky;
+        right: 0;
+        background: #fff;
+        z-index: 10;
+    }
+
+    /* Header */
+    .att-table th {
+        text-align: center;
+        padding: 10px 6px;
+        background: #eef3fa;
+        border-bottom: 1px solid #d8dce2;
+        font-size: 13px;
+    }
+
+    /* Employee Row */
+    .att-table td {
+        border-bottom: 1px solid #eee;
+        padding: 8px 6px;
+        text-align: center;
+    }
+
+    /* Employee Layout */
+    .emp-info {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .emp-avatar {
+        min-width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background: #111;
+        color: #fff;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 700;
+    }
+
+    .emp-details {
+        line-height: 1.2;
+        text-align: left;
+    }
+
+    .emp-name {
+        font-weight: 600;
+        font-size: 15px;
+    }
+
+    .emp-role {
+        font-size: 12px;
+        color: #6b7280;
+    }
+
+    /* Attendance Badges */
+    .att-badge {
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        font-size: 12px;
+        font-weight: bold;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        margin: auto;
+        position: relative;
+        line-height: 1;
+    }
+
+    .att-P {
+        background: #dcfce7;
+        color: #166534;
+    }
+
+    .att-A {
+        background: #fee2e2;
+        color: #b91c1c;
+    }
+
+    .att-L {
+        background: #dbeafe;
+        color: #1e40af;
+    }
+
+    /* Late */
+    .att-EG {
+        background: #fed7aa;
+        color: #c2410c;
+    }
+
+    /* Early Go */
+    .att-H {
+        background: #fce7f3;
+        color: #be185d;
+    }
+
+    /* Holiday */
+    .att-LV {
+        background: #f3e8ff;
+        color: #6b21a8;
+    }
+
+    /* Leave */
+    /* .att-SL kept only if any historical short_leave records exist */
+    .att-SL {
+        background: #ede9fe;
+        color: #5b21b6;
+    }
+
+    .att-WO {
+        background: #cffafe;
+        color: #0e7490;
+    }
+
+    /* Week Off */
+    .att-FH {
+        background: #fed7aa;
+        color: #c2410c;
+    }
+
+    /* First Half */
+    .att-SH {
+        background: #fed7aa;
+        color: #c2410c;
+    }
+
+    /* Second Half */
+    .att-ACO {
+        background: #f3f4f6;
+        color: #374151;
+    }
+
+    /* Auto Clock Out */
+    .att-DCO {
+        background: #f3f4f6;
+        color: #374151;
+    }
+
+    /* Didn't Clock Out */
+    .att-future {
+        background: #ffffff;
+        color: #9ca3af;
+        border: 1px solid #e5e7eb;
+    }
+
+    /* Future Date */
+
+    /* Tooltip */
+    .att-cell-wrapper {
+        position: relative;
+    }
+
+    .att-tooltip {
+        display: none;
+        position: absolute;
+        top: -50px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: #fff;
+        padding: 6px 12px;
+        border-radius: 999px;
+        font-size: 12px;
+        box-shadow: 0px 6px 18px rgba(0, 0, 0, 0.18);
+        white-space: nowrap;
+        z-index: 20;
+    }
+
+    .att-cell-wrapper:hover .att-tooltip {
+        display: block;
+    }
+
     #markAttendanceModal .modal-dialog {
         width: 700px !important;
         max-width: 98vw !important;
@@ -544,11 +682,13 @@ body { background:#f5f6f8; font-family: Arial, sans-serif; }
         margin: 4rem auto 1rem auto !important;
         border-radius: 18px !important;
     }
+
     #markAttendanceModal .modal-xl,
     #markAttendanceModal .modal-lg {
         width: 700px !important;
         max-width: 98vw !important;
     }
+
     #markAttendanceModal .modal-content {
         width: 700px !important;
         max-width: 98vw !important;
@@ -572,19 +712,18 @@ body { background:#f5f6f8; font-family: Arial, sans-serif; }
         <!-- RIGHT: Filters + +Add Attendance -->
         <div class="att-header-right">
             <!-- FILTERS -->
-            <form id="attendanceFilterForm"
-                  method="GET"
-                  style="display: flex; align-items: center; gap: 10px; margin-bottom: 0;">
+            <form id="attendanceFilterForm" method="GET"
+                style="display: flex; align-items: center; gap: 10px; margin-bottom: 0;">
                 <select name="month" class="att-filter-select">
                     <?php foreach ($monthNames as $m => $label): ?>
-                        <option value="<?php echo $m; ?>" <?php echo ($m == $month?'selected':''); ?>>
+                        <option value="<?php echo $m; ?>" <?php echo ($m == $month ? 'selected' : ''); ?>>
                             <?php echo $label; ?>
                         </option>
                     <?php endforeach; ?>
                 </select>
                 <select name="year" class="att-filter-select">
-                    <?php for ($y = $currentYear-3; $y <= $currentYear+3; $y++): ?>
-                        <option value="<?php echo $y; ?>" <?php echo ($y == $year?'selected':''); ?>>
+                    <?php for ($y = $currentYear - 3; $y <= $currentYear + 3; $y++): ?>
+                        <option value="<?php echo $y; ?>" <?php echo ($y == $year ? 'selected' : ''); ?>>
                             <?php echo $y; ?>
                         </option>
                     <?php endfor; ?>
@@ -592,11 +731,8 @@ body { background:#f5f6f8; font-family: Arial, sans-serif; }
                 <button class="btn btn-dark" type="submit">Apply</button>
             </form>
             <!-- ADD ATTENDANCE BUTTON (open Mark Attendance modal) -->
-            <button type="button"
-                class="btn btn-dark att-add-btn"
-                data-bs-toggle="modal"
-                data-bs-target="#markAttendanceModal"
-                style="margin-left: 8px;">
+            <button type="button" class="btn btn-dark att-add-btn" data-bs-toggle="modal"
+                data-bs-target="#markAttendanceModal" style="margin-left: 8px;">
                 + Add Attendance
             </button>
         </div>
@@ -648,9 +784,9 @@ body { background:#f5f6f8; font-family: Arial, sans-serif; }
                     <tr>
                         <th class="att-sticky-left" style="text-align:left; padding-left:15px;">EMPLOYEE</th>
 
-                        <?php for ($d=1; $d <= $totalDays; $d++):
+                        <?php for ($d = 1; $d <= $totalDays; $d++):
                             $day = date('D', strtotime("$year-$month-$d"));
-                        ?>
+                            ?>
                             <th>
                                 <?php echo $d; ?><br>
                                 <small><?php echo $day; ?></small>
@@ -662,148 +798,153 @@ body { background:#f5f6f8; font-family: Arial, sans-serif; }
                 </thead>
 
                 <tbody>
-                <?php if (!empty($employeesPage)): ?>
-                    <?php foreach ($employeesPage as $emp): 
-                        $empId        = (int)$emp['id'];
-                        $presentCount = 0;
-                    ?>
-                    <tr>
+                    <?php if (!empty($employeesPage)): ?>
+                        <?php foreach ($employeesPage as $emp):
+                            $empId = (int) $emp['user_id'];
+                            $presentCount = 0;
+                            ?>
+                            <tr>
 
-                        <!-- EMPLOYEE CELL -->
-                        <td class="att-sticky-left" style="background:#fff;">
-                            <div class="emp-info">
-                                <div class="emp-avatar">
-                                    <?php echo strtoupper(substr($emp['name'],0,1)); ?>
-                                </div>
-                                <div class="emp-details">
-                                    <div class="emp-name"><?php echo htmlspecialchars($emp['name']); ?></div>
-                                    <div class="emp-role"><?php echo htmlspecialchars($emp['designation_name'] ?? ''); ?></div>
-                                </div>
-                            </div>
-                        </td>
+                                <!-- EMPLOYEE CELL -->
+                                <td class="att-sticky-left" style="background:#fff;">
+                                    <div class="emp-info">
+                                        <div class="emp-avatar">
+                                            <?php echo strtoupper(substr($emp['name'], 0, 1)); ?>
+                                        </div>
+                                        <div class="emp-details">
+                                            <div class="emp-name"><?php echo htmlspecialchars($emp['name']); ?></div>
+                                            <div class="emp-role">
+                                                <?php echo htmlspecialchars($emp['designation_name'] ?? ''); ?></div>
+                                        </div>
+                                    </div>
+                                </td>
 
-                        <!-- ATTENDANCE CELLS -->
-                        <?php for ($d=1; $d <= $totalDays; $d++): 
-                            $currentDate = sprintf('%04d-%02d-%02d', $year, $month, $d);
-                            $dayData = $attendanceMap[$empId][$d] ?? null;
-                            
-                            // Get shift info and weekoff days for this employee
-                            $shiftInfo = $empShifts[$empId] ?? null;
-                            $weekoffDays = $empWeekOffs[$empId] ?? null;
-                            
-                            // Check if this date is a holiday
-                            $holidayName = $holidaysMap[$currentDate] ?? null;
-                            
-                            // Determine status using the function (holiday overrides weekoff)
-                            $statusResult = determineAttendanceStatus($dayData, $currentDate, $shiftInfo, $weekoffDays, $holidayName);
-                            $status = $statusResult['status'];
-                            $tooltip = $statusResult['tooltip'];
-                            
-                            // Count present days (excluding holidays, week offs, leaves)
-                            if (in_array($status, ['P', 'L', 'EG', 'FH', 'SH', 'ACO', 'DCO'])) {
-                                $presentCount++;
-                            }
-                            
-                            // Status display mapping
-                            $statusDisplay = [
-                                'P' => '✓',
-                                'A' => '✗',
-                                'L' => '⏰',
-                                'EG' => '↓',
-                                'H' => '🎉',
-                                'LV' => '✈',
-                                'SL' => '🏷',
-                                'WO' => '📅',
-                                'FH' => '☀↑',
-                                'SH' => '☀↓',
-                                'ACO' => '⚙',
-                                'DCO' => '?',
-                                '-' => '-'
-                            ];
-                            
-                            $display = $statusDisplay[$status] ?? '?';
-                        ?>
-                        <td>
-                            <div class="att-cell-wrapper att-clickable" 
-                                 data-emp-id="<?php echo $empId; ?>"
-                                 data-emp-name="<?php echo htmlspecialchars($emp['name']); ?>"
-                                 data-emp-role="<?php echo htmlspecialchars($emp['designation_name'] ?? ''); ?>"
-                                 data-date="<?php echo $currentDate; ?>"
-                                 data-status="<?php echo $status; ?>"
-                                 style="cursor: pointer;">
-                                <div class="att-badge att-<?php echo $status === '-' ? 'future' : $status; ?>">
-                                    <?php echo $display; ?>
-                                </div>
-                                <div class="att-tooltip">
-                                    <?php echo htmlspecialchars($tooltip); ?>
-                                </div>
-                            </div>
-                        </td>
-                        <?php endfor; ?>
+                                <!-- ATTENDANCE CELLS -->
+                                <?php for ($d = 1; $d <= $totalDays; $d++):
+                                    $currentDate = sprintf('%04d-%02d-%02d', $year, $month, $d);
+                                    $dayData = $attendanceMap[$empId][$d] ?? null;
 
-                        <!-- TOTAL -->
-                        <td class="att-sticky-right" style="background:#fff; font-weight:700;">
-                            <?php echo $presentCount . '/' . $totalDays; ?>
-                        </td>
+                                    // Get shift info and weekoff days for this employee
+                                    $shiftInfo = $empShifts[$empId] ?? null;
+                                    $weekoffDays = $empWeekOffs[$empId] ?? null;
 
-                    </tr>
-                    <?php endforeach; ?>
-                                <?php else: ?>
-                    <tr>
-                        <td colspan="<?php echo $totalDays + 2; ?>" class="text-center py-4 text-muted">
-                            No employees found.
-                        </td>
-                    </tr>
-                <?php endif; ?>
+                                    // Check if this date is a holiday
+                                    $holidayName = $holidaysMap[$currentDate] ?? null;
+
+                                    // Determine status using the function (holiday overrides weekoff)
+                                    $statusResult = determineAttendanceStatus($dayData, $currentDate, $shiftInfo, $weekoffDays, $holidayName);
+                                    $status = $statusResult['status'];
+                                    $tooltip = $statusResult['tooltip'];
+
+                                    // Count present days (excluding holidays, week offs, leaves)
+                                    if (in_array($status, ['P', 'L', 'EG', 'FH', 'SH', 'ACO', 'DCO'])) {
+                                        $presentCount++;
+                                    }
+
+                                    // Status display mapping
+                                    $statusDisplay = [
+                                        'P' => '✓',
+                                        'A' => '✗',
+                                        'L' => '⏰',
+                                        'EG' => '↓',
+                                        'H' => '🎉',
+                                        'LV' => '✈',
+                                        'SL' => '🏷',
+                                        'WO' => '📅',
+                                        'FH' => '☀↑',
+                                        'SH' => '☀↓',
+                                        'ACO' => '⚙',
+                                        'DCO' => '?',
+                                        '-' => '-'
+                                    ];
+
+                                    $display = $statusDisplay[$status] ?? '?';
+                                    ?>
+                                    <td>
+                                        <div class="att-cell-wrapper att-clickable" data-emp-id="<?php echo $empId; ?>"
+                                            data-emp-name="<?php echo htmlspecialchars($emp['name']); ?>"
+                                            data-emp-role="<?php echo htmlspecialchars($emp['designation_name'] ?? ''); ?>"
+                                            data-date="<?php echo $currentDate; ?>" data-status="<?php echo $status; ?>"
+                                            style="cursor: pointer;">
+                                            <div class="att-badge att-<?php echo $status === '-' ? 'future' : $status; ?>">
+                                                <?php echo $display; ?>
+                                            </div>
+                                            <div class="att-tooltip">
+                                                <?php echo htmlspecialchars($tooltip); ?>
+                                            </div>
+                                        </div>
+                                    </td>
+                                <?php endfor; ?>
+
+                                <!-- TOTAL -->
+                                <td class="att-sticky-right" style="background:#fff; font-weight:700;">
+                                    <?php echo $presentCount . '/' . $totalDays; ?>
+                                </td>
+
+                            </tr>
+                        <?php endforeach; ?>
+                    <?php else: ?>
+                        <tr>
+                            <td colspan="<?php echo $totalDays + 2; ?>" class="text-center py-4 text-muted">
+                                No employees found.
+                            </td>
+                        </tr>
+                    <?php endif; ?>
                 </tbody>
             </table>
 
         </div>
 
-                <?php
-                    $attTotalPages = max(1, (int)ceil($totalEmployees / max(1, $per_page)));
-                    $attStartRec = $totalEmployees > 0 ? ($offset + 1) : 0;
-                    $attEndRec = $totalEmployees > 0 ? ($offset + count($employeesPage)) : 0;
-                ?>
+        <?php
+        $attTotalPages = max(1, (int) ceil($totalEmployees / max(1, $per_page)));
+        $attStartRec = $totalEmployees > 0 ? ($offset + 1) : 0;
+        $attEndRec = $totalEmployees > 0 ? ($offset + count($employeesPage)) : 0;
+        ?>
 
-                <div id="attendancePagingMeta"
-                         data-month="<?php echo (int)$month; ?>"
-                         data-year="<?php echo (int)$year; ?>"
-                         data-page="<?php echo (int)$page; ?>"
-                         data-per-page="<?php echo (int)$per_page; ?>"
-                         style="display:none;"></div>
+        <div id="attendancePagingMeta" data-month="<?php echo (int) $month; ?>" data-year="<?php echo (int) $year; ?>"
+            data-page="<?php echo (int) $page; ?>" data-per-page="<?php echo (int) $per_page; ?>" style="display:none;">
+        </div>
 
-                <?php if ($attTotalPages > 1): ?>
-                    <nav class="mt-3 px-2">
-                        <ul class="pagination mb-0">
-                            <?php
-                                $start = max(1, $page - 3);
-                                $end = min($attTotalPages, $page + 3);
-                                if ($page > 1) echo '<li class="page-item"><a href="#" class="page-link att-page-link" data-page="'.($page-1).'">Previous</a></li>';
-                                if ($start > 1) echo '<li class="page-item"><a href="#" class="page-link att-page-link" data-page="1">1</a></li>' . ($start>2 ? '<li class="page-item disabled"><span class="page-link">...</span></li>':'' );
-                                for ($p = $start; $p <= $end; $p++){
-                                    $cls = $p == $page ? ' page-item active' : ' page-item';
-                                    echo '<li class="'.$cls.'"><a href="#" class="page-link att-page-link" data-page="'.$p.'">'.$p.'</a></li>';
-                                }
-                                if ($end < $attTotalPages) echo ($end < $attTotalPages-1 ? '<li class="page-item disabled"><span class="page-link">...</span></li>':'') . '<li class="page-item"><a href="#" class="page-link att-page-link" data-page="'.$attTotalPages.'">'.$attTotalPages.'</a></li>';
-                                if ($page < $attTotalPages) echo '<li class="page-item"><a href="#" class="page-link att-page-link" data-page="'.($page+1).'">Next</a></li>';
-                            ?>
-                        </ul>
-                    </nav>
-                <?php endif; ?>
+        <?php if ($attTotalPages > 1): ?>
+            <nav class="mt-3 px-2">
+                <ul class="pagination mb-0">
+                    <?php
+                    $start = max(1, $page - 3);
+                    $end = min($attTotalPages, $page + 3);
+                    if ($page > 1)
+                        echo '<li class="page-item"><a href="#" class="page-link att-page-link" data-page="' . ($page - 1) . '">Previous</a></li>';
+                    if ($start > 1)
+                        echo '<li class="page-item"><a href="#" class="page-link att-page-link" data-page="1">1</a></li>' . ($start > 2 ? '<li class="page-item disabled"><span class="page-link">...</span></li>' : '');
+                    for ($p = $start; $p <= $end; $p++) {
+                        $cls = $p == $page ? ' page-item active' : ' page-item';
+                        echo '<li class="' . $cls . '"><a href="#" class="page-link att-page-link" data-page="' . $p . '">' . $p . '</a></li>';
+                    }
+                    if ($end < $attTotalPages)
+                        echo ($end < $attTotalPages - 1 ? '<li class="page-item disabled"><span class="page-link">...</span></li>' : '') . '<li class="page-item"><a href="#" class="page-link att-page-link" data-page="' . $attTotalPages . '">' . $attTotalPages . '</a></li>';
+                    if ($page < $attTotalPages)
+                        echo '<li class="page-item"><a href="#" class="page-link att-page-link" data-page="' . ($page + 1) . '">Next</a></li>';
+                    ?>
+                </ul>
+            </nav>
+        <?php endif; ?>
 
-                <div class="d-flex justify-content-between align-items-center mt-2 px-2 pb-2">
-                    <div class="small text-muted">Record <?php echo $attStartRec; ?>–<?php echo $attEndRec; ?> of <?php echo (int)$totalEmployees; ?></div>
-                    <div class="d-flex align-items-center gap-2">
-                        <label class="small text-muted mb-0">Rows:</label>
-                        <select id="attendancePerPageFooter" class="form-select form-select-sm" style="width:80px;">
-                            <option value="10" <?php if($per_page==10) echo 'selected'; ?>>10</option>
-                            <option value="25" <?php if($per_page==25) echo 'selected'; ?>>25</option>
-                            <option value="50" <?php if($per_page==50) echo 'selected'; ?>>50</option>
-                            <option value="100" <?php if($per_page==100) echo 'selected'; ?>>100</option>
-                        </select>
-                    </div>
-                </div>
+        <div class="d-flex justify-content-between align-items-center mt-2 px-2 pb-2">
+            <div class="small text-muted">Record <?php echo $attStartRec; ?>–<?php echo $attEndRec; ?> of
+                <?php echo (int) $totalEmployees; ?></div>
+            <div class="d-flex align-items-center gap-2">
+                <label class="small text-muted mb-0">Rows:</label>
+                <select id="attendancePerPageFooter" class="form-select form-select-sm" style="width:80px;">
+                    <option value="10" <?php if ($per_page == 10)
+                        echo 'selected'; ?>>10</option>
+                    <option value="25" <?php if ($per_page == 25)
+                        echo 'selected'; ?>>25</option>
+                    <option value="50" <?php if ($per_page == 50)
+                        echo 'selected'; ?>>50</option>
+                    <option value="100" <?php if ($per_page == 100)
+                        echo 'selected'; ?>>100</option>
+                </select>
+            </div>
+        </div>
     </div>
 
 </div>

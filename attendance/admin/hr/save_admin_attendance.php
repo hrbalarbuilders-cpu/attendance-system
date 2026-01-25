@@ -26,26 +26,26 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
   - overwrite     (1 if overwrite existing logs)
 */
 
-$employee_id   = isset($_POST['employee_id']) ? (int)$_POST['employee_id'] : 0;
-$date          = trim($_POST['date'] ?? ''); // single date
-$clock_in      = trim($_POST['clock_in'] ?? '');
-$clock_out     = trim($_POST['clock_out'] ?? '');
-$working_from  = trim($_POST['working_from'] ?? '');
-$reason        = $_POST['reason'] ?? 'normal';   // NEW
-$late          = isset($_POST['late']) ? (int)$_POST['late'] : 0;
-$half_day      = isset($_POST['half_day']) ? (int)$_POST['half_day'] : 0;
-$overwrite     = isset($_POST['overwrite']) ? 1 : 0;
+$employee_id = isset($_POST['employee_id']) ? (int) $_POST['employee_id'] : 0;
+$date = trim($_POST['date'] ?? ''); // single date
+$clock_in = trim($_POST['clock_in'] ?? '');
+$clock_out = trim($_POST['clock_out'] ?? '');
+$working_from = trim($_POST['working_from'] ?? '');
+$reason = $_POST['reason'] ?? 'normal';   // NEW
+$late = isset($_POST['late']) ? (int) $_POST['late'] : 0;
+$half_day = isset($_POST['half_day']) ? (int) $_POST['half_day'] : 0;
+$overwrite = isset($_POST['overwrite']) ? 1 : 0;
 
-$mark_by       = $_POST['mark_by'] ?? 'date';
+$mark_by = $_POST['mark_by'] ?? 'date';
 
 $errors = [];
 
 // Build list of dates based on mark_by
 $datesToSave = [];
 if ($mark_by === 'multiple') {
-    $rawDates = isset($_POST['dates']) ? (array)$_POST['dates'] : [];
+    $rawDates = isset($_POST['dates']) ? (array) $_POST['dates'] : [];
     foreach ($rawDates as $d) {
-        $d = trim((string)$d);
+        $d = trim((string) $d);
         if ($d !== '') {
             $datesToSave[] = $d;
         }
@@ -62,10 +62,14 @@ if ($mark_by === 'multiple') {
 }
 
 // Basic validation
-if ($employee_id <= 0)  $errors[] = 'Employee is required.';
-if ($clock_in === '')   $errors[] = 'Clock In time is required.';
-if ($clock_out === '')  $errors[] = 'Clock Out time is required.';
-if ($working_from === '') $errors[] = 'Working From is required.';
+if ($employee_id <= 0)
+    $errors[] = 'Employee is required.';
+if ($clock_in === '')
+    $errors[] = 'Clock In time is required.';
+if ($clock_out === '')
+    $errors[] = 'Clock Out time is required.';
+if ($working_from === '')
+    $errors[] = 'Working From is required.';
 
 if ($reason === '') {
     $reason = 'normal';
@@ -73,7 +77,7 @@ if ($reason === '') {
 
 // Normalize clock_in / clock_out to 24-hour H:i format while allowing AM/PM input
 $normalizeTime = function ($t) {
-    $t = trim((string)$t);
+    $t = trim((string) $t);
     if ($t === '') {
         return '';
     }
@@ -84,7 +88,7 @@ $normalizeTime = function ($t) {
     return date('H:i', $ts);
 };
 
-$clock_in  = $normalizeTime($clock_in);
+$clock_in = $normalizeTime($clock_in);
 $clock_out = $normalizeTime($clock_out);
 
 if (!empty($errors)) {
@@ -98,7 +102,7 @@ if (!empty($errors)) {
 /* ---------------- EMPLOYEE + user_id (numeric from emp_code) ---------------- */
 
 // employees table se employee fetch
-$stmt = $con->prepare("SELECT id, emp_code FROM employees WHERE id = ?");
+$stmt = $con->prepare("SELECT user_id, emp_code FROM employees WHERE user_id = ?");
 if (!$stmt) {
     echo json_encode([
         'success' => false,
@@ -109,7 +113,7 @@ if (!$stmt) {
 $stmt->bind_param("i", $employee_id);
 $stmt->execute();
 $empRes = $stmt->get_result();
-$emp    = $empRes->fetch_assoc();
+$emp = $empRes->fetch_assoc();
 
 if (!$emp) {
     echo json_encode([
@@ -119,12 +123,8 @@ if (!$emp) {
     exit;
 }
 
-// Example: EMP001 -> 1
-$empNumericId = (int) filter_var($emp['emp_code'], FILTER_SANITIZE_NUMBER_INT);
-if ($empNumericId <= 0) {
-    // fallback: agar emp_code se numeric nahi mila to employees.id use karo
-    $empNumericId = (int)$emp['id'];
-}
+// Use actual Database Primary Key (user_id)
+$empNumericId = (int) $emp['user_id'];
 
 /* ---------------- Overwrite (same user + same date) ---------------- */
 
@@ -135,7 +135,7 @@ if ($overwrite) {
                     AND DATE(time) = ?
     ");
     if ($del) {
-                $del->bind_param("is", $empNumericId, $currentDate);
+        $del->bind_param("is", $empNumericId, $currentDate);
     }
 }
 
@@ -190,7 +190,7 @@ $currentDate = '';
 
 foreach ($datesToSave as $d) {
     $currentDate = $d;
-    $clockInDateTime  = $currentDate . ' ' . $clock_in  . ':00';
+    $clockInDateTime = $currentDate . ' ' . $clock_in . ':00';
     $clockOutDateTime = $currentDate . ' ' . $clock_out . ':00';
 
     if ($overwrite && isset($del) && $del) {

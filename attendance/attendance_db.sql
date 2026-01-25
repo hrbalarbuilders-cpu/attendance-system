@@ -114,7 +114,7 @@ INSERT INTO `designations` (`id`, `department_id`, `designation_name`, `created_
 --
 
 CREATE TABLE `employees` (
-  `id` int(11) NOT NULL,
+  `user_id` int(11) NOT NULL,
   `emp_code` varchar(20) NOT NULL,
   `name` varchar(100) NOT NULL,
   `mobile` varchar(20) DEFAULT NULL,
@@ -136,7 +136,7 @@ CREATE TABLE `employees` (
 -- Dumping data for table `employees`
 --
 
-INSERT INTO `employees` (`id`, `emp_code`, `name`, `mobile`, `email`, `dob`, `department_id`, `designation_id`, `shift_id`, `default_working_from`, `weekoff_days`, `joining_date`, `updated_at`, `device_id`, `status`, `created_at`) VALUES
+INSERT INTO `employees` (`user_id`, `emp_code`, `name`, `mobile`, `email`, `dob`, `department_id`, `designation_id`, `shift_id`, `default_working_from`, `weekoff_days`, `joining_date`, `updated_at`, `device_id`, `status`, `created_at`) VALUES
 (3, 'EMP001', 'Sachin Mandal', '6352816306', 'sachin.balarbuilders@gmail.com', '2001-12-28', 1, 2, 2, 'Ville Flora', 'Wednesday', '2025-12-28', '2025-12-28 11:21:23', 'flutter_device', 1, '2025-12-09 20:17:04'),
 (4, 'EMP002', 'Harish Thapa', '6352816306', 'harish.balarbuilders@gmail.com', '2025-12-29', 1, 2, 4, 'Ville Flora', 'Thursday', '2025-12-31', '2025-12-28 12:33:13', NULL, 1, '2025-12-10 09:10:56'),
 (5, 'EMP005', 'Ganesh Rohit', '', 'ganesh.balarbuilders@gmail.com', '0000-00-00', 1, 2, 2, 'Ville Flora', NULL, '2025-12-22', '2026-01-10 11:19:53', NULL, 1, '2025-12-22 11:18:40');
@@ -331,7 +331,7 @@ INSERT INTO `lead_sources` (`id`, `name`, `description`, `status`, `created_at`,
 
 CREATE TABLE `leave_applications` (
   `id` int(11) NOT NULL,
-  `employee_id` int(11) NOT NULL,
+  `user_id` int(11) NOT NULL,
   `leave_type_id` int(11) NOT NULL,
   `from_date` date NOT NULL,
   `to_date` date NOT NULL,
@@ -376,7 +376,7 @@ INSERT INTO `leave_types` (`id`, `code`, `name`, `yearly_quota`, `monthly_limit`
 CREATE TABLE `leave_type_employees` (
   `id` int(11) NOT NULL,
   `leave_type_id` int(11) NOT NULL,
-  `employee_id` int(11) NOT NULL,
+  `user_id` int(11) NOT NULL,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
@@ -384,7 +384,7 @@ CREATE TABLE `leave_type_employees` (
 -- Dumping data for table `leave_type_employees`
 --
 
-INSERT INTO `leave_type_employees` (`id`, `leave_type_id`, `employee_id`, `created_at`) VALUES
+INSERT INTO `leave_type_employees` (`id`, `leave_type_id`, `user_id`, `created_at`) VALUES
 (14, 1, 5, '2025-12-22 11:18:52'),
 (15, 1, 4, '2025-12-22 11:18:52'),
 (16, 1, 3, '2025-12-22 11:18:52');
@@ -397,7 +397,7 @@ INSERT INTO `leave_type_employees` (`id`, `leave_type_id`, `employee_id`, `creat
 
 CREATE TABLE `sales_persons` (
   `id` int(11) NOT NULL,
-  `employee_id` int(11) NOT NULL,
+  `user_id` int(11) NOT NULL,
   `status` tinyint(4) DEFAULT 1,
   `created_at` datetime DEFAULT current_timestamp(),
   `updated_at` datetime DEFAULT NULL
@@ -407,7 +407,7 @@ CREATE TABLE `sales_persons` (
 -- Dumping data for table `sales_persons`
 --
 
-INSERT INTO `sales_persons` (`id`, `employee_id`, `status`, `created_at`, `updated_at`) VALUES
+INSERT INTO `sales_persons` (`id`, `user_id`, `status`, `created_at`, `updated_at`) VALUES
 (1, 1, 1, '2026-01-05 13:04:59', NULL),
 (12, 5, 1, '2026-01-09 16:17:09', NULL),
 (15, 3, 1, '2026-01-09 20:22:16', NULL),
@@ -492,7 +492,7 @@ ALTER TABLE `designations`
 -- Indexes for table `employees`
 --
 ALTER TABLE `employees`
-  ADD PRIMARY KEY (`id`),
+  ADD PRIMARY KEY (`user_id`),
   ADD KEY `department_id` (`department_id`),
   ADD KEY `designation_id` (`designation_id`);
 
@@ -562,14 +562,14 @@ ALTER TABLE `leave_types`
 --
 ALTER TABLE `leave_type_employees`
   ADD PRIMARY KEY (`id`),
-  ADD UNIQUE KEY `uniq_leave_emp` (`leave_type_id`,`employee_id`);
+  ADD UNIQUE KEY `uniq_leave_emp` (`leave_type_id`,`user_id`);
 
 --
 -- Indexes for table `sales_persons`
 --
 ALTER TABLE `sales_persons`
   ADD PRIMARY KEY (`id`),
-  ADD UNIQUE KEY `employee_id` (`employee_id`);
+  ADD UNIQUE KEY `user_id` (`user_id`);
 
 --
 -- Indexes for table `shifts`
@@ -609,7 +609,7 @@ ALTER TABLE `designations`
 -- AUTO_INCREMENT for table `employees`
 --
 ALTER TABLE `employees`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=6;
+  MODIFY `user_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=6;
 
 --
 -- AUTO_INCREMENT for table `holidays`

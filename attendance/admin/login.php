@@ -5,8 +5,8 @@ include 'config/db.php';
 
 // If already logged in, redirect to dashboard
 if (isset($_SESSION['emp_id']) && $_SESSION['emp_id'] > 0) {
-    header("Location: dashboard/index.php");
-    exit;
+  header("Location: dashboard/index.php");
+  exit;
 }
 
 $error = '';
@@ -14,48 +14,49 @@ $success = '';
 
 // Handle login form submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $email = isset($_POST['email']) ? trim($_POST['email']) : '';
-    $password = isset($_POST['password']) ? trim($_POST['password']) : '';
-    
-    if (empty($email) || empty($password)) {
-        $error = 'Please enter both email and password.';
+  $email = isset($_POST['email']) ? trim($_POST['email']) : '';
+  $password = isset($_POST['password']) ? trim($_POST['password']) : '';
+
+  if (empty($email) || empty($password)) {
+    $error = 'Please enter both email and password.';
+  } else {
+    // Check employee credentials
+    $stmt = $con->prepare("SELECT user_id, emp_code, name, email, status FROM employees WHERE email = ? AND status = 1 LIMIT 1");
+    if (!$stmt) {
+      $error = 'Database error: ' . $con->error;
     } else {
-        // Check employee credentials
-        $stmt = $con->prepare("SELECT id, emp_code, name, email, status FROM employees WHERE email = ? AND status = 1 LIMIT 1");
-        if (!$stmt) {
-            $error = 'Database error: ' . $con->error;
+      $stmt->bind_param("s", $email);
+      $stmt->execute();
+      $result = $stmt->get_result();
+
+      if ($result && $result->num_rows > 0) {
+        $employee = $result->fetch_assoc();
+
+        // Default password is 123456
+        if ($password === '123456') {
+          // Set session variables
+          $_SESSION['emp_id'] = $employee['user_id'];
+          $_SESSION['emp_name'] = $employee['name'];
+          $_SESSION['emp_code'] = $employee['emp_code'];
+          $_SESSION['emp_email'] = $employee['email'];
+
+          // Redirect to dashboard
+          header("Location: dashboard/index.php");
+          exit;
         } else {
-            $stmt->bind_param("s", $email);
-            $stmt->execute();
-            $result = $stmt->get_result();
-            
-            if ($result && $result->num_rows > 0) {
-                $employee = $result->fetch_assoc();
-                
-                // Default password is 123456
-                if ($password === '123456') {
-                    // Set session variables
-                    $_SESSION['emp_id'] = $employee['id'];
-                    $_SESSION['emp_name'] = $employee['name'];
-                    $_SESSION['emp_code'] = $employee['emp_code'];
-                    $_SESSION['emp_email'] = $employee['email'];
-                    
-                    // Redirect to dashboard
-                    header("Location: dashboard/index.php");
-                    exit;
-                } else {
-                    $error = 'Invalid password. Please try again.';
-                }
-            } else {
-                $error = 'Employee not found or account is inactive.';
-            }
-            $stmt->close();
+          $error = 'Invalid password. Please try again.';
         }
+      } else {
+        $error = 'Employee not found or account is inactive.';
+      }
+      $stmt->close();
     }
+  }
 }
 ?>
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -264,42 +265,44 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
   </style>
 </head>
+
 <body>
 
-<div class="login-container">
-  <div class="login-card">
-    <div class="login-header">
-      <div class="login-logo">🔐</div>
-      <h1>Welcome Back</h1>
-      <p>Sign in to your attendance dashboard</p>
+  <div class="login-container">
+    <div class="login-card">
+      <div class="login-header">
+        <div class="login-logo">🔐</div>
+        <h1>Welcome Back</h1>
+        <p>Sign in to your attendance dashboard</p>
+      </div>
+
+      <?php if ($error): ?>
+        <div class="error-message">
+          <span>⚠️</span> <?php echo htmlspecialchars($error); ?>
+        </div>
+      <?php endif; ?>
+
+      <form method="POST" action="">
+        <div class="form-group">
+          <label for="email">Email Address</label>
+          <input type="email" id="email" name="email" placeholder="Enter your email" required
+            value="<?php echo isset($_POST['email']) ? htmlspecialchars($_POST['email']) : ''; ?>">
+        </div>
+
+        <div class="form-group">
+          <label for="password">Password</label>
+          <input type="password" id="password" name="password" placeholder="Enter your password" required>
+          <div class="password-hint">Default password: 123456</div>
+        </div>
+
+        <button type="submit" class="btn-login">Sign In</button>
+      </form>
     </div>
 
-    <?php if ($error): ?>
-      <div class="error-message">
-        <span>⚠️</span> <?php echo htmlspecialchars($error); ?>
-      </div>
-    <?php endif; ?>
-
-    <form method="POST" action="">
-      <div class="form-group">
-        <label for="email">Email Address</label>
-        <input type="email" id="email" name="email" placeholder="Enter your email" required 
-               value="<?php echo isset($_POST['email']) ? htmlspecialchars($_POST['email']) : ''; ?>">
-      </div>
-
-      <div class="form-group">
-        <label for="password">Password</label>
-        <input type="password" id="password" name="password" placeholder="Enter your password" required>
-        <div class="password-hint">Default password: 123456</div>
-      </div>
-
-      <button type="submit" class="btn-login">Sign In</button>
-    </form>
+    <a href="hr/employees.php" class="back-link">← Back to HR Panel</a>
   </div>
 
-  <a href="hr/employees.php" class="back-link">← Back to HR Panel</a>
-</div>
-
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 </body>
+
 </html>

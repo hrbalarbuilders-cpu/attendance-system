@@ -86,21 +86,21 @@
               <label class="switch mb-0" title="Enable/Disable">
                 <input type="checkbox"
                        class="status-toggle"
-                       data-id="<?php echo (int)$row['id']; ?>"
+                       data-id="<?php echo (int)$row['user_id']; ?>"
                        <?php echo $isActive ? 'checked' : ''; ?>>
                 <span class="slider"></span>
               </label>
             </td>
             <td data-label="Action">
               <div class="dropdown">
-                <button class="btn btn-sm btn-light border-0 px-2 py-1 d-flex align-items-center justify-content-center" type="button" id="actionMenu<?php echo $row['id']; ?>" data-bs-toggle="dropdown" aria-expanded="false" style="box-shadow:none;">
+                <button class="btn btn-sm btn-light border-0 px-2 py-1 d-flex align-items-center justify-content-center" type="button" id="actionMenu<?php echo $row['user_id']; ?>" data-bs-toggle="dropdown" aria-expanded="false" style="box-shadow:none;">
                   <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" fill="currentColor" class="bi bi-three-dots-vertical text-secondary" viewBox="0 0 16 16">
                     <path d="M9.5 2a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zm0 6a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zm0 6a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0z"/>
                   </svg>
                 </button>
-                <ul class="dropdown-menu shadow-sm rounded-3 py-2" aria-labelledby="actionMenu<?php echo $row['id']; ?>" style="min-width:140px;">
+                <ul class="dropdown-menu shadow-sm rounded-3 py-2" aria-labelledby="actionMenu<?php echo $row['user_id']; ?>" style="min-width:140px;">
                   <li>
-                    <a class="dropdown-item d-flex align-items-center gap-2" href="view_employee.php?id=<?php echo (int)$row['id']; ?>">
+                    <a class="dropdown-item d-flex align-items-center gap-2" href="view_employee.php?id=<?php echo (int)$row['user_id']; ?>">
                       <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-person-lines-fill text-primary" viewBox="0 0 16 16">
                         <path d="M1 14s-1 0-1-1 1-4 7-4 7 3 7 4-1 1-1 1H1zm7-6a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm4.5 1a.5.5 0 0 1 0-1h2a.5.5 0 0 1 0 1h-2zm0 2a.5.5 0 0 1 0-1h2a.5.5 0 0 1 0 1h-2zm0 2a.5.5 0 0 1 0-1h2a.5.5 0 0 1 0 1h-2z"/>
                       </svg>
@@ -108,7 +108,7 @@
                     </a>
                   </li>
                   <li>
-                    <a class="dropdown-item d-flex align-items-center gap-2" href="edit_employee.php?id=<?php echo (int)$row['id']; ?>">
+                    <a class="dropdown-item d-flex align-items-center gap-2" href="edit_employee.php?id=<?php echo (int)$row['user_id']; ?>">
                       <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-pencil-square text-warning" viewBox="0 0 16 16">
                         <path d="M15.502 1.94a.5.5 0 0 1 0 .706l-1 1a.5.5 0 0 1-.708 0l-1-1a.5.5 0 0 1 0-.707l1-1a.5.5 0 0 1 .707 0l1 1zm-1.75 2.456-1-1L4 11.293V12.5a.5.5 0 0 0 .5.5h1.207l8.043-8.104z"/>
                         <path fill-rule="evenodd" d="M1 13.5A1.5 1.5 0 0 0 2.5 15h11a1.5 1.5 0 0 0 1.5-1.5v-7a.5.5 0 0 0-1 0v7a.5.5 0 0 1-1.5 1.5h-11A.5.5 0 0 1 1 13.5v-11A.5.5 0 0 1 2.5 1H9a.5.5 0 0 0 0-1H2.5A1.5 1.5 0 0 0 1 2.5v11z"/>

@@ -10,9 +10,9 @@ include 'db.php';
 // Accept either `employee_id` (client expectation) or `emp_id` (existing server file)
 $emp_id = 0;
 if (isset($_GET['employee_id'])) {
-    $emp_id = (int)$_GET['employee_id'];
+    $emp_id = (int) $_GET['employee_id'];
 } elseif (isset($_GET['emp_id'])) {
-    $emp_id = (int)$_GET['emp_id'];
+    $emp_id = (int) $_GET['emp_id'];
 }
 
 if ($emp_id <= 0) {
@@ -21,12 +21,11 @@ if ($emp_id <= 0) {
 }
 
 try {
-    // Get leave_type_ids assigned to this employee
-    $q = "SELECT leave_type_id FROM leave_type_employees WHERE employee_id = $emp_id";
+    $q = "SELECT leave_type_id FROM leave_type_employees WHERE user_id = $emp_id";
     $res = $con->query($q);
     $leaveTypeIds = [];
     while ($row = $res->fetch_assoc()) {
-        $leaveTypeIds[] = (int)$row['leave_type_id'];
+        $leaveTypeIds[] = (int) $row['leave_type_id'];
     }
     if (empty($leaveTypeIds)) {
         echo json_encode(['status' => 'success', 'leave_types' => []]);
@@ -45,7 +44,7 @@ try {
     $leaveTypes = [];
     while ($row2 = $res2->fetch_assoc()) {
         $leaveTypes[] = [
-            'id' => (int)$row2['id'],
+            'id' => (int) $row2['id'],
             'code' => $row2['code'],
             'name' => $row2['name'],
         ];

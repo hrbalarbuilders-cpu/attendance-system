@@ -4,12 +4,13 @@ date_default_timezone_set('Asia/Kolkata');
 include '../config/db.php';
 
 // ---------- Helper: Generate Next Employee Code ----------
-function generateEmpCode(mysqli $con): string {
-    $res = $con->query("SELECT MAX(id) AS max_id FROM employees");
-    $row = $res ? $res->fetch_assoc() : null;
-    $nextId = ($row && $row['max_id']) ? ((int)$row['max_id'] + 1) : 1;
+function generateEmpCode(mysqli $con): string
+{
+  $res = $con->query("SELECT MAX(user_id) AS max_id FROM employees");
+  $row = $res ? $res->fetch_assoc() : null;
+  $nextId = ($row && $row['max_id']) ? ((int) $row['max_id'] + 1) : 1;
 
-    return 'EMP' . str_pad($nextId, 3, '0', STR_PAD_LEFT); // EMP001, EMP002...
+  return 'EMP' . str_pad($nextId, 3, '0', STR_PAD_LEFT); // EMP001, EMP002...
 }
 
 // ---------- Fetch Dropdown Data (Departments, Designations, Shifts, Working From) ----------
@@ -31,11 +32,11 @@ if ($wfCheck && $wfCheck->num_rows > 0) {
   $wfRes = $con->query("SELECT code, label FROM working_from_master WHERE is_active = 1 ORDER BY label ASC");
   if ($wfRes && $wfRes->num_rows > 0) {
     while ($wf = $wfRes->fetch_assoc()) {
-      $code  = trim((string)($wf['code'] ?? ''));
-      $label = trim((string)($wf['label'] ?? ''));
+      $code = trim((string) ($wf['code'] ?? ''));
+      $label = trim((string) ($wf['label'] ?? ''));
       if ($code !== '') {
         $workingFromOptions[] = [
-          'code'  => $code,
+          'code' => $code,
           'label' => $label !== '' ? $label : ucfirst($code),
         ];
       }
@@ -45,7 +46,7 @@ if ($wfCheck && $wfCheck->num_rows > 0) {
 if (empty($workingFromOptions)) {
   $workingFromOptions = [
     ['code' => 'office', 'label' => 'Office'],
-    ['code' => 'home',   'label' => 'Home'],
+    ['code' => 'home', 'label' => 'Home'],
     ['code' => 'client', 'label' => 'Client Site'],
   ];
 }
@@ -58,226 +59,229 @@ $errors = [];
 
 // ---------- Handle Form Submit ----------
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $name           = trim($_POST['name'] ?? '');
-    $mobile         = trim($_POST['mobile'] ?? '');
-    $email          = trim($_POST['email'] ?? '');
-    $dob            = $_POST['dob'] ?? null;
-    $department_id  = (int)($_POST['department_id'] ?? 0);
-    $designation_id = (int)($_POST['designation_id'] ?? 0);
-    $shift_id       = (int)($_POST['shift_id'] ?? 0);
-    $default_working_from = trim($_POST['default_working_from'] ?? '');
-    $joining_date   = $_POST['joining_date'] ?? null;
+  $name = trim($_POST['name'] ?? '');
+  $mobile = trim($_POST['mobile'] ?? '');
+  $email = trim($_POST['email'] ?? '');
+  $dob = $_POST['dob'] ?? null;
+  $department_id = (int) ($_POST['department_id'] ?? 0);
+  $designation_id = (int) ($_POST['designation_id'] ?? 0);
+  $shift_id = (int) ($_POST['shift_id'] ?? 0);
+  $default_working_from = trim($_POST['default_working_from'] ?? '');
+  $joining_date = $_POST['joining_date'] ?? null;
 
-    // Basic validation
-    if ($name === '') {
-        $errors[] = "Employee name is required.";
-    }
-    if ($department_id <= 0) {
-        $errors[] = "Please select a department.";
-    }
-    if ($designation_id <= 0) {
-        $errors[] = "Please select a designation.";
-    }
-    if ($shift_id <= 0) {
-        $errors[] = "Please select a shift.";
-    }
-    if ($default_working_from === '') {
-      $errors[] = "Please select Working From.";
-    }
-    if (!$joining_date) {
-        $errors[] = "Joining date is required.";
-    }
-    if (!$dob) {
-        $errors[] = "Date of birth is required.";
-    }
+  // Basic validation
+  if ($name === '') {
+    $errors[] = "Employee name is required.";
+  }
+  if ($department_id <= 0) {
+    $errors[] = "Please select a department.";
+  }
+  if ($designation_id <= 0) {
+    $errors[] = "Please select a designation.";
+  }
+  if ($shift_id <= 0) {
+    $errors[] = "Please select a shift.";
+  }
+  if ($default_working_from === '') {
+    $errors[] = "Please select Working From.";
+  }
+  if (!$joining_date) {
+    $errors[] = "Joining date is required.";
+  }
+  if (!$dob) {
+    $errors[] = "Date of birth is required.";
+  }
 
-    if (empty($errors)) {
-        $emp_code = generateEmpCode($con);
+  if (empty($errors)) {
+    $emp_code = generateEmpCode($con);
 
-        // NOTE: shift_name + device_id hata diya, ab sirf shift_id store kar rahe hain
-        $sql = "INSERT INTO employees 
+    // NOTE: shift_name + device_id hata diya, ab sirf shift_id store kar rahe hain
+    $sql = "INSERT INTO employees 
           (emp_code, name, mobile, email, dob, department_id, designation_id, shift_id, default_working_from, joining_date, status)
           VALUES (?,?,?,?,?,?,?,?,?,?,1)";
 
-        $stmt = $con->prepare($sql);
-        if ($stmt) {
-            $stmt->bind_param(
-                "ssssiiisss",
-                $emp_code,
-                $name,
-                $mobile,
-                $email,
-                $dob,
-                $department_id,
-                $designation_id,
-                $shift_id,
-                $default_working_from,
-                $joining_date
-            );
+    $stmt = $con->prepare($sql);
+    if ($stmt) {
+      $stmt->bind_param(
+        "ssssiiisss",
+        $emp_code,
+        $name,
+        $mobile,
+        $email,
+        $dob,
+        $department_id,
+        $designation_id,
+        $shift_id,
+        $default_working_from,
+        $joining_date
+      );
 
-            if ($stmt->execute()) {
-                echo "<script>alert('Employee added successfully.');window.location='employees.php';</script>";
-                exit;
-            } else {
-                $errors[] = "Database error: " . $con->error;
-            }
-        } else {
-            $errors[] = "Failed to prepare query: " . $con->error;
-        }
+      if ($stmt->execute()) {
+        echo "<script>alert('Employee added successfully.');window.location='employees.php';</script>";
+        exit;
+      } else {
+        $errors[] = "Database error: " . $con->error;
+      }
+    } else {
+      $errors[] = "Failed to prepare query: " . $con->error;
     }
+  }
 }
 ?>
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <title>Add Employee</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
+
 <body>
 
-<div class="container py-4">
-  <div class="d-flex justify-content-between align-items-center mb-3">
-    <h3 class="mb-0">Add Employee</h3>
-    <a href="employees.php" class="btn btn-outline-secondary">Back to List</a>
-  </div>
-
-  <?php if (!empty($errors)) { ?>
-    <div class="alert alert-danger">
-      <ul class="mb-0">
-        <?php foreach ($errors as $e) { ?>
-          <li><?php echo htmlspecialchars($e); ?></li>
-        <?php } ?>
-      </ul>
+  <div class="container py-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <h3 class="mb-0">Add Employee</h3>
+      <a href="employees.php" class="btn btn-outline-secondary">Back to List</a>
     </div>
-  <?php } ?>
 
-  <div class="card">
-    <div class="card-body">
-      <form method="POST" action="add_employee.php">
-        <div class="row g-3">
-          <!-- Emp Code (display only) -->
-          <div class="col-md-3">
-            <label class="form-label">Employee Code</label>
-            <input type="text" class="form-control" value="<?php echo htmlspecialchars($displayEmpCode); ?>" disabled>
-            <div class="form-text">Auto generated</div>
-          </div>
+    <?php if (!empty($errors)) { ?>
+      <div class="alert alert-danger">
+        <ul class="mb-0">
+          <?php foreach ($errors as $e) { ?>
+            <li><?php echo htmlspecialchars($e); ?></li>
+          <?php } ?>
+        </ul>
+      </div>
+    <?php } ?>
 
-          <div class="col-md-5">
-            <label class="form-label">Full Name</label>
-            <input type="text" name="name" class="form-control" required
-                   value="<?php echo htmlspecialchars($_POST['name'] ?? ''); ?>">
-          </div>
+    <div class="card">
+      <div class="card-body">
+        <form method="POST" action="add_employee.php">
+          <div class="row g-3">
+            <!-- Emp Code (display only) -->
+            <div class="col-md-3">
+              <label class="form-label">Employee Code</label>
+              <input type="text" class="form-control" value="<?php echo htmlspecialchars($displayEmpCode); ?>" disabled>
+              <div class="form-text">Auto generated</div>
+            </div>
 
-          <div class="col-md-4">
-            <label class="form-label">Mobile</label>
-            <input type="text" name="mobile" class="form-control"
-                   value="<?php echo htmlspecialchars($_POST['mobile'] ?? ''); ?>">
-          </div>
+            <div class="col-md-5">
+              <label class="form-label">Full Name</label>
+              <input type="text" name="name" class="form-control" required
+                value="<?php echo htmlspecialchars($_POST['name'] ?? ''); ?>">
+            </div>
 
-          <div class="col-md-4">
-            <label class="form-label">Email</label>
-            <input type="email" name="email" class="form-control"
-                   value="<?php echo htmlspecialchars($_POST['email'] ?? ''); ?>">
-          </div>
+            <div class="col-md-4">
+              <label class="form-label">Mobile</label>
+              <input type="text" name="mobile" class="form-control"
+                value="<?php echo htmlspecialchars($_POST['mobile'] ?? ''); ?>">
+            </div>
 
-          <div class="col-md-4">
-            <label class="form-label">Date of Birth</label>
-            <input type="date" name="dob" class="form-control" required
-                   value="<?php echo htmlspecialchars($_POST['dob'] ?? ''); ?>">
-          </div>
+            <div class="col-md-4">
+              <label class="form-label">Email</label>
+              <input type="email" name="email" class="form-control"
+                value="<?php echo htmlspecialchars($_POST['email'] ?? ''); ?>">
+            </div>
 
-          <div class="col-md-4">
-            <label class="form-label">Joining Date</label>
-            <input type="date" name="joining_date" class="form-control" required
-                   value="<?php echo htmlspecialchars($_POST['joining_date'] ?? ''); ?>">
-          </div>
+            <div class="col-md-4">
+              <label class="form-label">Date of Birth</label>
+              <input type="date" name="dob" class="form-control" required
+                value="<?php echo htmlspecialchars($_POST['dob'] ?? ''); ?>">
+            </div>
 
-          <div class="col-md-6">
-            <label class="form-label">Department</label>
-            <select name="department_id" class="form-select" required>
-              <option value="">Select Department</option>
-              <?php
-              mysqli_data_seek($deptRes, 0);
-              while ($d = $deptRes->fetch_assoc()) {
+            <div class="col-md-4">
+              <label class="form-label">Joining Date</label>
+              <input type="date" name="joining_date" class="form-control" required
+                value="<?php echo htmlspecialchars($_POST['joining_date'] ?? ''); ?>">
+            </div>
+
+            <div class="col-md-6">
+              <label class="form-label">Department</label>
+              <select name="department_id" class="form-select" required>
+                <option value="">Select Department</option>
+                <?php
+                mysqli_data_seek($deptRes, 0);
+                while ($d = $deptRes->fetch_assoc()) {
                   $selected = (isset($_POST['department_id']) && $_POST['department_id'] == $d['id']) ? 'selected' : '';
-              ?>
-                <option value="<?php echo $d['id']; ?>" <?php echo $selected; ?>>
-                  <?php echo htmlspecialchars($d['department_name']); ?>
-                </option>
-              <?php } ?>
-            </select>
-          </div>
+                  ?>
+                  <option value="<?php echo $d['id']; ?>" <?php echo $selected; ?>>
+                    <?php echo htmlspecialchars($d['department_name']); ?>
+                  </option>
+                <?php } ?>
+              </select>
+            </div>
 
-          <div class="col-md-6">
-            <label class="form-label">Designation</label>
-            <select name="designation_id" class="form-select" required>
-              <option value="">Select Designation</option>
-              <?php
-              mysqli_data_seek($desigRes, 0);
-              while ($r = $desigRes->fetch_assoc()) {
+            <div class="col-md-6">
+              <label class="form-label">Designation</label>
+              <select name="designation_id" class="form-select" required>
+                <option value="">Select Designation</option>
+                <?php
+                mysqli_data_seek($desigRes, 0);
+                while ($r = $desigRes->fetch_assoc()) {
                   $text = $r['designation_name'] . " (" . $r['department_name'] . ")";
                   $selected = (isset($_POST['designation_id']) && $_POST['designation_id'] == $r['id']) ? 'selected' : '';
-              ?>
-                <option value="<?php echo $r['id']; ?>" <?php echo $selected; ?>>
-                  <?php echo htmlspecialchars($text); ?>
-                </option>
-              <?php } ?>
-            </select>
-            <div class="form-text">Later we can make this dependent on department with AJAX.</div>
-          </div>
+                  ?>
+                  <option value="<?php echo $r['id']; ?>" <?php echo $selected; ?>>
+                    <?php echo htmlspecialchars($text); ?>
+                  </option>
+                <?php } ?>
+              </select>
+              <div class="form-text">Later we can make this dependent on department with AJAX.</div>
+            </div>
 
-          <!-- SHIFT DROPDOWN -->
-          <div class="col-md-6">
-            <label class="form-label">Shift</label>
-            <select name="shift_id" class="form-select" required>
-              <option value="">Select Shift</option>
-              <?php
-              if ($shiftRes && $shiftRes->num_rows > 0) {
+            <!-- SHIFT DROPDOWN -->
+            <div class="col-md-6">
+              <label class="form-label">Shift</label>
+              <select name="shift_id" class="form-select" required>
+                <option value="">Select Shift</option>
+                <?php
+                if ($shiftRes && $shiftRes->num_rows > 0) {
                   mysqli_data_seek($shiftRes, 0);
                   while ($s = $shiftRes->fetch_assoc()) {
-                      $startDisp = date('h:i A', strtotime($s['start_time']));
-                      $endDisp   = date('h:i A', strtotime($s['end_time']));
-                      $label     = $s['shift_name'] . " ($startDisp – $endDisp)";
-                      $selected  = (isset($_POST['shift_id']) && $_POST['shift_id'] == $s['id']) ? 'selected' : '';
-              ?>
-                <option value="<?php echo $s['id']; ?>" <?php echo $selected; ?>>
-                  <?php echo htmlspecialchars($label); ?>
-                </option>
-              <?php
+                    $startDisp = date('h:i A', strtotime($s['start_time']));
+                    $endDisp = date('h:i A', strtotime($s['end_time']));
+                    $label = $s['shift_name'] . " ($startDisp – $endDisp)";
+                    $selected = (isset($_POST['shift_id']) && $_POST['shift_id'] == $s['id']) ? 'selected' : '';
+                    ?>
+                    <option value="<?php echo $s['id']; ?>" <?php echo $selected; ?>>
+                      <?php echo htmlspecialchars($label); ?>
+                    </option>
+                    <?php
                   }
-              }
-              ?>
-            </select>
-          </div>
+                }
+                ?>
+              </select>
+            </div>
 
-          <!-- Working From -->
-          <div class="col-md-6">
-            <label class="form-label">Working From</label>
-            <select name="default_working_from" class="form-select" required>
-              <option value="">Select Working From</option>
-              <?php
-              $curWf = $_POST['default_working_from'] ?? '';
-              foreach ($workingFromOptions as $wf) {
+            <!-- Working From -->
+            <div class="col-md-6">
+              <label class="form-label">Working From</label>
+              <select name="default_working_from" class="form-select" required>
+                <option value="">Select Working From</option>
+                <?php
+                $curWf = $_POST['default_working_from'] ?? '';
+                foreach ($workingFromOptions as $wf) {
                   $selected = ($curWf === $wf['code']) ? 'selected' : '';
-              ?>
-                <option value="<?php echo htmlspecialchars($wf['code']); ?>" <?php echo $selected; ?>>
-                  <?php echo htmlspecialchars($wf['label']); ?>
-                </option>
-              <?php } ?>
-            </select>
+                  ?>
+                  <option value="<?php echo htmlspecialchars($wf['code']); ?>" <?php echo $selected; ?>>
+                    <?php echo htmlspecialchars($wf['label']); ?>
+                  </option>
+                <?php } ?>
+              </select>
+            </div>
+
           </div>
 
-        </div>
-
-        <div class="mt-4">
-          <button type="submit" class="btn btn-dark">Save Employee</button>
-          <a href="employees.php" class="btn btn-secondary ms-2">Cancel</a>
-        </div>
-      </form>
+          <div class="mt-4">
+            <button type="submit" class="btn btn-dark">Save Employee</button>
+            <a href="employees.php" class="btn btn-secondary ms-2">Cancel</a>
+          </div>
+        </form>
+      </div>
     </div>
   </div>
-</div>
 
 </body>
+
 </html>

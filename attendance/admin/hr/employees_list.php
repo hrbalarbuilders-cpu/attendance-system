@@ -3,10 +3,11 @@ include '../config/db.php';
 
 $isAjax = isset($_GET['ajax']) && $_GET['ajax'];
 
-$page = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
-$per_page = isset($_GET['per_page']) ? max(1, (int)$_GET['per_page']) : 10;
+$page = isset($_GET['page']) ? max(1, (int) $_GET['page']) : 1;
+$per_page = isset($_GET['per_page']) ? max(1, (int) $_GET['per_page']) : 10;
 // prevent very large page sizes
-if ($per_page > 100) $per_page = 100;
+if ($per_page > 100)
+  $per_page = 100;
 $offset = ($page - 1) * $per_page;
 
 $q = isset($_GET['q']) ? trim($_GET['q']) : '';
@@ -27,7 +28,7 @@ $totalCount = 0;
 $countRes = $con->query($countSql);
 if ($countRes && $countRes->num_rows) {
   $r = $countRes->fetch_assoc();
-  $totalCount = (int)($r['c'] ?? 0);
+  $totalCount = (int) ($r['c'] ?? 0);
 }
 
 $sql = "
@@ -36,8 +37,8 @@ FROM employees e
 LEFT JOIN departments d ON d.id = e.department_id
 LEFT JOIN shifts s ON s.id = e.shift_id
 " . $whereSql . "
-ORDER BY e.id DESC
-LIMIT " . (int)$offset . "," . (int)$per_page;
+ORDER BY e.user_id DESC
+LIMIT " . (int) $offset . "," . (int) $per_page;
 
 $result = $con->query($sql);
 
@@ -48,6 +49,7 @@ if ($isAjax) {
 ?>
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -55,32 +57,35 @@ if ($isAjax) {
   <link rel="icon" href="data:,">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
+
 <body>
 
-<?php include __DIR__ . '/employees_list_fragment.php'; ?>
+  <?php include __DIR__ . '/employees_list_fragment.php'; ?>
 
 </body>
+
 </html>
-  if (noDataRow) {
-    noDataRow.style.display = anyVisible ? 'none' : '';
-  }
-  // Show matched names under the table
-  var resultsDiv = document.getElementById('searchResults');
-  if (resultsDiv) {
-    if (filter !== '' && matchedNames.length > 0) {
-      resultsDiv.innerHTML = '<strong>Matching Employees:</strong><ul class="list-group list-group-flush">' +
-        matchedNames.map(function(name) { return '<li class="list-group-item py-1">' + name + '</li>'; }).join('') + '</ul>';
-    } else if (filter !== '') {
-      resultsDiv.innerHTML = '<span class="text-danger">No matching employees found.</span>';
-    } else {
-      resultsDiv.innerHTML = '';
-    }
-  }
+if (noDataRow) {
+noDataRow.style.display = anyVisible ? 'none' : '';
+}
+// Show matched names under the table
+var resultsDiv = document.getElementById('searchResults');
+if (resultsDiv) {
+if (filter !== '' && matchedNames.length > 0) {
+resultsDiv.innerHTML = '<strong>Matching Employees:</strong>
+<ul class="list-group list-group-flush">' +
+  matchedNames.map(function(name) { return '<li class="list-group-item py-1">' + name + '</li>'; }).join('') + '</ul>';
+} else if (filter !== '') {
+resultsDiv.innerHTML = '<span class="text-danger">No matching employees found.</span>';
+} else {
+resultsDiv.innerHTML = '';
+}
+}
 }
 var searchInput = document.getElementById('employeeSearch');
 if (searchInput) {
-  searchInput.addEventListener('input', filterEmployeeTable);
-  // Run once on load to ensure correct state
-  filterEmployeeTable();
+searchInput.addEventListener('input', filterEmployeeTable);
+// Run once on load to ensure correct state
+filterEmployeeTable();
 }
 </script>

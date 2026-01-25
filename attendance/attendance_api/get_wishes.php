@@ -5,11 +5,11 @@ header('Content-Type: application/json');
 require_once __DIR__ . '/db.php';
 
 // How many days ahead to include (including today)
-$windowDays = isset($_GET['days']) ? max(0, (int)$_GET['days']) : 7;
+$windowDays = isset($_GET['days']) ? max(0, (int) $_GET['days']) : 7;
 
 try {
     // Fetch active employees with DOB and joining_date (if any)
-    $sql = "SELECT id, name, dob, joining_date, status FROM employees WHERE status = 1";
+    $sql = "SELECT user_id, name, dob, joining_date, status FROM employees WHERE status = 1";
     $res = $con->query($sql);
 
     if (!$res) {
@@ -21,12 +21,12 @@ try {
     }
 
     $today = new DateTime('today');
-    $currentYear = (int)$today->format('Y');
+    $currentYear = (int) $today->format('Y');
 
     $events = [];
 
     while ($row = $res->fetch_assoc()) {
-        $empId = (int)$row['id'];
+        $empId = (int) $row['user_id'];
         $name = $row['name'];
 
         // Birthday
@@ -38,7 +38,7 @@ try {
                 if ($occurrence < $today) {
                     $occurrence->modify('+1 year');
                 }
-                $daysUntil = (int)$today->diff($occurrence)->format('%a');
+                $daysUntil = (int) $today->diff($occurrence)->format('%a');
                 if ($daysUntil <= $windowDays) {
                     $events[] = [
                         'id' => $empId,
@@ -60,11 +60,13 @@ try {
                 if ($occurrence < $today) {
                     $occurrence->modify('+1 year');
                 }
-                $daysUntil = (int)$today->diff($occurrence)->format('%a');
+                $daysUntil = (int) $today->diff($occurrence)->format('%a');
                 if ($daysUntil <= $windowDays) {
                     // Years completed on upcoming anniversary
-                    $years = (int)$occurrence->format('Y') - (int)$jd->format('Y');
-                    if ($years < 0) { $years = 0; }
+                    $years = (int) $occurrence->format('Y') - (int) $jd->format('Y');
+                    if ($years < 0) {
+                        $years = 0;
+                    }
                     $events[] = [
                         'id' => $empId,
                         'name' => $name,
@@ -79,7 +81,7 @@ try {
     }
 
     // Sort by days_until, then by name
-    usort($events, function($a, $b) {
+    usort($events, function ($a, $b) {
         if ($a['days_until'] === $b['days_until']) {
             return strcasecmp($a['name'], $b['name']);
         }

@@ -7,7 +7,7 @@ header('Access-Control-Allow-Methods: GET');
 
 include 'db.php';
 
-$emp_id = isset($_GET['emp_id']) ? (int)$_GET['emp_id'] : 0;
+$emp_id = isset($_GET['user_id']) ? (int) $_GET['user_id'] : (isset($_GET['emp_id']) ? (int) $_GET['emp_id'] : 0);
 if ($emp_id <= 0) {
     echo json_encode(['status' => 'error', 'msg' => 'Missing or invalid employee id']);
     exit;
@@ -16,7 +16,7 @@ if ($emp_id <= 0) {
 $sql = "SELECT la.id, lt.name AS leave_type, la.from_date, la.to_date, la.reason, la.status, la.created_at
         FROM leave_applications la
         JOIN leave_types lt ON la.leave_type_id = lt.id
-        WHERE la.employee_id = ?
+        WHERE la.user_id = ?
         ORDER BY la.created_at DESC";
 $stmt = $con->prepare($sql);
 $stmt->bind_param('i', $emp_id);

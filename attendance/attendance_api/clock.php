@@ -11,19 +11,49 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 include "db.php";
 
 // Read POST values from Flutter
-$user_id      = isset($_POST['user_id'])      ? trim($_POST['user_id'])      : null;
-$type         = isset($_POST['type'])         ? trim($_POST['type'])         : null;
-$time         = isset($_POST['time'])         ? trim($_POST['time'])         : null;
-$device_id    = isset($_POST['device_id'])    ? trim($_POST['device_id'])    : null;
-$lat          = isset($_POST['lat'])          ? trim($_POST['lat'])          : null;
-$lng          = isset($_POST['lng'])          ? trim($_POST['lng'])          : null;
+$user_id = isset($_POST['user_id']) ? trim($_POST['user_id']) : null;
+$type = isset($_POST['type']) ? trim($_POST['type']) : null;
+$time = isset($_POST['time']) ? trim($_POST['time']) : null;
+$device_id = isset($_POST['device_id']) ? trim($_POST['device_id']) : null;
+$lat = isset($_POST['lat']) ? trim($_POST['lat']) : null;
+$lng = isset($_POST['lng']) ? trim($_POST['lng']) : null;
 $working_from = isset($_POST['working_from']) ? trim($_POST['working_from']) : '';
-$reason       = isset($_POST['reason'])       ? trim($_POST['reason'])       : 'shift_start';
+$reason = isset($_POST['reason']) ? trim($_POST['reason']) : 'shift_start';
+$is_auto = isset($_POST['is_auto']) ? (int) $_POST['is_auto'] : 0;
 
 // Basic validation
 if (!$user_id || !$type || !$time || !$device_id) {
     echo json_encode(["status" => "error", "msg" => "Missing parameters"]);
     exit;
+}
+
+// ---------------- IP ADDRESS RESTRICTION ----------------
+$ipSettings = [];
+$resSettings = $con->query("SELECT setting_key, setting_value FROM attendance_settings WHERE setting_key IN ('ip_restriction_enabled', 'allowed_ips')");
+if ($resSettings) {
+    while ($row = $resSettings->fetch_assoc()) {
+        $ipSettings[$row['setting_key']] = $row['setting_value'];
+    }
+}
+
+if (($ipSettings['ip_restriction_enabled'] ?? '0') === '1') {
+    $clientIp = $_SERVER['REMOTE_ADDR'] ?? '';
+    $allowedIpsRaw = $ipSettings['allowed_ips'] ?? '';
+    $allowedIps = array_filter(array_map('trim', explode("\n", str_replace("\r", "", $allowedIpsRaw))));
+
+    if (!empty($allowedIps) && !in_array($clientIp, $allowedIps)) {
+        echo json_encode([
+            "status" => "error",
+            "msg" => "Access denied. IP " . $clientIp . " is not authorized for attendance."
+        ]);
+        exit;
+    }
+}
+
+// Ensure is_auto column exists in attendance_logs
+$resCol = $con->query("SHOW COLUMNS FROM attendance_logs LIKE 'is_auto'");
+if ($resCol && $resCol->num_rows === 0) {
+    $con->query("ALTER TABLE attendance_logs ADD COLUMN is_auto TINYINT(1) DEFAULT 0 AFTER synced");
 }
 
 // Validate type
@@ -48,20 +78,20 @@ if (!in_array($reason, $allowedReasons, true)) {
 // 1) Per-employee: if this employee already has a different device_id, block.
 // 2) Global: if this device_id is already registered to some OTHER employee, block.
 
- $empCodePattern = "EMP" . str_pad((string)intval($user_id), 3, '0', STR_PAD_LEFT);
- $uidInt = (int)$user_id;
+$empCodePattern = "EMP" . str_pad((string) intval($user_id), 3, '0', STR_PAD_LEFT);
+$uidInt = (int) $user_id;
 
 // Track the actual employee row id that this user_id maps to.
 // This avoids treating the same employee as "another employee" in the global check
-// when user_id is derived from emp_code (e.g., EMP006) but employees.id is different.
+// when user_id is derived from emp_code (e.g., EMP006) but employees.user_id is different.
 $currentEmployeeId = $uidInt;
 $defaultWorkingFrom = '';
 
 // Step 1: check current employee's registered device (if any) and ensure Working From is assigned
 $checkStmt = $con->prepare(
-    "SELECT id, emp_code, device_id, default_working_from
+    "SELECT user_id, emp_code, device_id, default_working_from
      FROM employees
-     WHERE (emp_code = ? OR id = ?) AND status = 1
+     WHERE (emp_code = ? OR user_id = ?) AND status = 1
      LIMIT 1"
 );
 
@@ -72,17 +102,22 @@ if ($checkStmt) {
 
     if ($checkResult && $checkResult->num_rows > 0) {
         $empRow = $checkResult->fetch_assoc();
-        $currentEmployeeId = (int)$empRow['id'];
+        $currentEmployeeId = (int) $empRow['user_id'];
         $registeredDeviceId = $empRow['device_id'];
-        $defaultWorkingFrom = trim((string)($empRow['default_working_from'] ?? ''));
+        $defaultWorkingFrom = trim((string) ($empRow['default_working_from'] ?? ''));
 
-        // If this employee already has a different device registered, reject
-        if (!empty($registeredDeviceId) && $registeredDeviceId !== $device_id) {
+        // Check if this device is registered for this employee
+        $devStmt = $con->prepare("SELECT id FROM employee_devices WHERE user_id = ? AND device_id = ? LIMIT 1");
+        $devStmt->bind_param("is", $currentEmployeeId, $device_id);
+        $devStmt->execute();
+        $isRegistered = $devStmt->get_result()->num_rows > 0;
+        $devStmt->close();
+
+        if (!$isRegistered) {
             echo json_encode([
                 "status" => "error",
                 "msg" => "Device not registered for this employee. Please contact administrator."
             ]);
-            $checkStmt->close();
             exit;
         }
 
@@ -110,9 +145,8 @@ if ($checkStmt) {
 
 // Step 2: ensure this device_id is not registered to any OTHER active employee
 $deviceStmt = $con->prepare(
-    "SELECT id, emp_code
-     FROM employees
-     WHERE device_id = ? AND status = 1 AND id <> ?
+    "SELECT user_id FROM employee_devices
+     WHERE device_id = ? AND user_id <> ?
      LIMIT 1"
 );
 
@@ -143,12 +177,13 @@ if ($type === 'in') {
         $currentDate = date('Y-m-d', $timestamp);
 
         // Check if this user already has a clock-in for this date
+        // Use resolved $currentEmployeeId to match what is actually stored
         $firstInStmt = $con->prepare(
             "SELECT id FROM attendance_logs WHERE user_id = ? AND type = 'in' AND DATE(time) = ? LIMIT 1"
         );
 
         if ($firstInStmt) {
-            $firstInStmt->bind_param("is", $user_id, $currentDate);
+            $firstInStmt->bind_param("is", $currentEmployeeId, $currentDate);
             $firstInStmt->execute();
             $firstInResult = $firstInStmt->get_result();
 
@@ -157,14 +192,14 @@ if ($type === 'in') {
 
             if ($isFirstClockInToday) {
                 // Fetch shift start/end time for this employee
-                $empCodeForShift = "EMP" . str_pad((string)intval($user_id), 3, '0', STR_PAD_LEFT);
-                $uidIntForShift = (int)$user_id;
+                $empCodeForShift = "EMP" . str_pad((string) intval($user_id), 3, '0', STR_PAD_LEFT);
+                $uidIntForShift = (int) $user_id;
 
                 $shiftStmt = $con->prepare("
                     SELECT s.start_time, s.end_time
                     FROM employees e
                     LEFT JOIN shifts s ON s.id = e.shift_id
-                    WHERE (e.emp_code = ? OR e.id = ?) AND e.status = 1
+                    WHERE (e.emp_code = ? OR e.user_id = ?) AND e.status = 1
                     LIMIT 1
                 ");
 
@@ -201,6 +236,15 @@ if ($type === 'in') {
 
                     $shiftStmt->close();
                 }
+            } else {
+                // User already has a clock-in today.
+                // Prevent duplicate 'in' punches from the auto-heartbeat.
+                // We return 'success' so the mobile app knows it's synced/safe.
+                echo json_encode([
+                    "status" => "success",
+                    "msg" => "Already clocked in today."
+                ]);
+                exit;
             }
         }
     }
@@ -215,56 +259,44 @@ if ($working_from === '') {
 
 // Use prepared statements for security and performance
 $stmt = $con->prepare("INSERT INTO attendance_logs
-        (user_id, type, time, device_id, latitude, longitude, working_from, reason, synced)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)");
+        (user_id, type, time, device_id, latitude, longitude, working_from, reason, synced, is_auto)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?)");
 
 if (!$stmt) {
     echo json_encode([
         "status" => "error",
-        "msg"    => "DB prepare error: " . $con->error
+        "msg" => "DB prepare error: " . $con->error
     ]);
     exit;
 }
 
 // Convert lat/lng to float or NULL
-$latFloat = ($lat !== null && $lat !== '') ? (float)$lat : null;
-$lngFloat = ($lng !== null && $lng !== '') ? (float)$lng : null;
+$latFloat = ($lat !== null && $lat !== '') ? (float) $lat : null;
+$lngFloat = ($lng !== null && $lng !== '') ? (float) $lng : null;
 
 // Bind parameters
-$stmt->bind_param("isssddss",
-    $user_id,      // i = integer
+$stmt->bind_param(
+    "isssddssi",
+    $currentEmployeeId, // Use resolved DB ID, not raw input
     $type,         // s = string
     $time,         // s = string
     $device_id,    // s = string
     $latFloat,     // d = double
     $lngFloat,     // d = double
     $working_from, // s = string
-    $reason        // s = string
+    $reason,        // s = string
+    $is_auto       // i = integer
 );
 
 if ($stmt->execute()) {
-    // On first successful clock, auto-register device_id for the employee if missing
-    $empCodePattern = "EMP" . str_pad((string)intval($user_id), 3, '0', STR_PAD_LEFT);
-    $upd = $con->prepare(
-        "UPDATE employees
-         SET device_id = ?
-         WHERE (emp_code = ? OR id = ?)
-           AND (device_id IS NULL OR device_id = '')
-         LIMIT 1"
-    );
-    if ($upd) {
-        $uidInt = (int)$user_id;
-        $upd->bind_param("ssi", $device_id, $empCodePattern, $uidInt);
-        $upd->execute();
-        $upd->close();
-    }
-
+    // Device is already validated - if employee has no device, clock.php will block them
+    // Device registration is now done explicitly via register_device.php
     echo json_encode(["status" => "success"]);
     exit;
 } else {
     echo json_encode([
         "status" => "error",
-        "msg"    => "DB error: " . $stmt->error
+        "msg" => "DB error: " . $stmt->error
     ]);
     exit;
 }

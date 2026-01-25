@@ -4,7 +4,7 @@ include '../config/db.php';
 
 header('Content-Type: application/json');
 
-$emp_id = isset($_GET['emp_id']) ? (int)$_GET['emp_id'] : 0;
+$emp_id = isset($_GET['emp_id']) ? (int) $_GET['emp_id'] : 0;
 $date = isset($_GET['date']) ? trim($_GET['date']) : '';
 
 if ($emp_id <= 0 || $date === '') {
@@ -14,7 +14,7 @@ if ($emp_id <= 0 || $date === '') {
 
 // Get employee info along with shift details (if any)
 $empStmt = $con->prepare("SELECT 
-                                                        e.id, 
+                                                        e.user_id, 
                                                         e.name, 
                                                         e.emp_code, 
                                                         desig.designation_name,
@@ -26,7 +26,7 @@ $empStmt = $con->prepare("SELECT
                                                     FROM employees e 
                                                     LEFT JOIN designations desig ON desig.id = e.designation_id 
                                                     LEFT JOIN shifts s ON s.id = e.shift_id
-                                                    WHERE e.id = ?");
+                                                    WHERE e.user_id = ?");
 $empStmt->bind_param("i", $emp_id);
 $empStmt->execute();
 $empResult = $empStmt->get_result();
@@ -37,11 +37,8 @@ if (!$employee) {
     exit;
 }
 
-// Get numeric user_id from emp_code
-$num = (int) filter_var($employee['emp_code'] ?? '', FILTER_SANITIZE_NUMBER_INT);
-if ($num <= 0) {
-    $num = (int)$employee['id'];
-}
+// Use actual Database Primary Key (user_id)
+$num = (int) $employee['user_id'];
 
 // Get attendance logs for this date
 $startDateTime = $date . ' 00:00:00';
@@ -73,7 +70,7 @@ if (!empty($employee['shift_start_time']) && !empty($employee['shift_end_time'])
     $shift = [
         'start_time' => date('h:i A', strtotime($employee['shift_start_time'])),
         'end_time' => date('h:i A', strtotime($employee['shift_end_time'])),
-        'late_mark_after' => isset($employee['shift_late_mark_after']) ? (int)$employee['shift_late_mark_after'] : 0,
+        'late_mark_after' => isset($employee['shift_late_mark_after']) ? (int) $employee['shift_late_mark_after'] : 0,
         'lunch_start' => !empty($employee['shift_lunch_start']) ? date('h:i A', strtotime($employee['shift_lunch_start'])) : null,
         'lunch_end' => !empty($employee['shift_lunch_end']) ? date('h:i A', strtotime($employee['shift_lunch_end'])) : null,
     ];

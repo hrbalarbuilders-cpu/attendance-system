@@ -8,7 +8,7 @@ if (!isset($_GET['id'])) {
 
 $id = intval($_GET['id']);
 
-$stmt = $con->prepare("DELETE FROM employees WHERE id = ?");
+$stmt = $con->prepare("DELETE FROM employees WHERE user_id = ?");
 $stmt->bind_param("i", $id);
 $stmt->execute();
 

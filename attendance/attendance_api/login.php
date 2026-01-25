@@ -32,7 +32,7 @@ if (empty($email) || empty($password)) {
 
 // Check if employee exists with this email
 $stmt = $con->prepare("
-    SELECT id, emp_code, name, email, status, shift_id
+    SELECT user_id, emp_code, name, email, status, shift_id
     FROM employees 
     WHERE email = ? AND status = 1
     LIMIT 1
@@ -52,9 +52,9 @@ $result = $stmt->get_result();
 
 if ($result && $result->num_rows > 0) {
     $employee = $result->fetch_assoc();
-    
+
     // Double-check: Ensure employee status is active (1)
-    if ((int)$employee['status'] !== 1) {
+    if ((int) $employee['status'] !== 1) {
         echo json_encode([
             "status" => "error",
             "msg" => "Account is inactive. Please contact administrator."
@@ -62,19 +62,17 @@ if ($result && $result->num_rows > 0) {
         $stmt->close();
         exit;
     }
-    
+
     // Check password (default password is 123456)
     if ($password === $defaultPassword) {
-        // Get numeric user_id from emp_code (same logic as clock.php)
-        $user_id = (int) filter_var($employee['emp_code'], FILTER_SANITIZE_NUMBER_INT);
-        if ($user_id <= 0) {
-            $user_id = (int)$employee['id'];
-        }
-        
+        // Use the actual Database Primary Key as the User ID
+        // This ensures the App, Server, and DB all speak the same language (e.g., "3").
+        $user_id = (int) $employee['user_id'];
+
         echo json_encode([
             "status" => "success",
             "user_id" => $user_id,
-            "employee_id" => (int)$employee['id'],
+            "employee_id" => (int) $employee['user_id'],
             "emp_code" => $employee['emp_code'],
             "name" => $employee['name'],
             "email" => $employee['email'],
@@ -95,4 +93,3 @@ if ($result && $result->num_rows > 0) {
 
 $stmt->close();
 ?>
-

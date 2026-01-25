@@ -15,12 +15,12 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 include "../config/db.php";
 
 // Read POST values
-$user_id      = isset($_POST['user_id'])      ? (int)$_POST['user_id']       : 0;
-$type         = isset($_POST['type'])         ? trim($_POST['type'])         : '';
+$user_id = isset($_POST['user_id']) ? (int) $_POST['user_id'] : 0;
+$type = isset($_POST['type']) ? trim($_POST['type']) : '';
 $working_from = isset($_POST['working_from']) ? trim($_POST['working_from']) : 'Office';
-$reason       = isset($_POST['reason'])       ? trim($_POST['reason'])       : 'shift_start';
-$lat          = isset($_POST['lat'])          ? (float)$_POST['lat']         : 0;
-$lng          = isset($_POST['lng'])          ? (float)$_POST['lng']         : 0;
+$reason = isset($_POST['reason']) ? trim($_POST['reason']) : 'shift_start';
+$lat = isset($_POST['lat']) ? (float) $_POST['lat'] : 0;
+$lng = isset($_POST['lng']) ? (float) $_POST['lng'] : 0;
 
 // Basic validation
 if (!$user_id || !$type) {
@@ -41,7 +41,7 @@ if (!in_array($reason, $allowedReasons, true)) {
 }
 
 // Check if employee exists and is active
-$empStmt = $con->prepare("SELECT id, name, default_working_from FROM employees WHERE id = ? AND status = 1 LIMIT 1");
+$empStmt = $con->prepare("SELECT user_id, name, default_working_from FROM employees WHERE user_id = ? AND status = 1 LIMIT 1");
 if (!$empStmt) {
     echo json_encode(["status" => "error", "msg" => "Database error"]);
     exit;
@@ -65,6 +65,32 @@ if (empty($working_from) && !empty($employee['default_working_from'])) {
     $working_from = $employee['default_working_from'];
 }
 
+// ============ IP ADDRESS RESTRICTION ============
+// Fetch IP settings
+$ipSettings = [];
+$resSettings = $con->query("SELECT setting_key, setting_value FROM attendance_settings WHERE setting_key IN ('ip_restriction_enabled', 'allowed_ips')");
+if ($resSettings) {
+    while ($row = $resSettings->fetch_assoc()) {
+        $ipSettings[$row['setting_key']] = $row['setting_value'];
+    }
+}
+
+if (($ipSettings['ip_restriction_enabled'] ?? '0') === '1') {
+    $clientIp = $_SERVER['REMOTE_ADDR'] ?? '';
+    // Handle proxies if needed (optional, basic REMOTE_ADDR for now)
+
+    $allowedIpsRaw = $ipSettings['allowed_ips'] ?? '';
+    $allowedIps = array_filter(array_map('trim', explode("\n", str_replace("\r", "", $allowedIpsRaw))));
+
+    if (!empty($allowedIps) && !in_array($clientIp, $allowedIps)) {
+        echo json_encode([
+            "status" => "error",
+            "msg" => "Your IP address (" . $clientIp . ") is not authorized for clock-in/out. Please connect to an authorized network."
+        ]);
+        exit;
+    }
+}
+
 // ============ GEO-FENCE VALIDATION ============
 // Check if location provided
 if ($lat == 0 && $lng == 0) {
@@ -85,17 +111,17 @@ if (!$geoStmt || $geoStmt->num_rows === 0) {
     $closestDistance = PHP_FLOAT_MAX;
     $closestRadius = 0;
     $closestLocationName = '';
-    
+
     while ($geo = $geoStmt->fetch_assoc()) {
-        $distance = calculateDistance($lat, $lng, (float)$geo['latitude'], (float)$geo['longitude']);
-        $radius = (float)$geo['radius_meters'];
-        
+        $distance = calculateDistance($lat, $lng, (float) $geo['latitude'], (float) $geo['longitude']);
+        $radius = (float) $geo['radius_meters'];
+
         if ($distance <= $radius) {
             $withinGeoFence = true;
             $matchedLocation = $geo['location_name'] ?: $geo['location_group'];
             break;
         }
-        
+
         // Track closest location
         if ($distance < $closestDistance) {
             $closestDistance = $distance;
@@ -108,16 +134,16 @@ if (!$geoStmt || $geoStmt->num_rows === 0) {
 if (!$withinGeoFence) {
     // Calculate how far outside the closest geo-fence
     $outsideBy = $closestDistance - $closestRadius;
-    
+
     // Format distance nicely
     if ($outsideBy >= 1000) {
         $distanceText = number_format($outsideBy / 1000, 2) . ' km';
     } else {
         $distanceText = round($outsideBy) . ' meters';
     }
-    
+
     echo json_encode([
-        "status" => "error", 
+        "status" => "error",
         "msg" => "You are " . $distanceText . " outside the allowed location (" . $closestLocationName . "). Please move closer to clock in/out.",
         "distance_outside" => round($outsideBy),
         "closest_location" => $closestLocationName
@@ -158,20 +184,21 @@ $con->close();
  * Calculate distance between two coordinates using Haversine formula
  * Returns distance in meters
  */
-function calculateDistance($lat1, $lng1, $lat2, $lng2) {
+function calculateDistance($lat1, $lng1, $lat2, $lng2)
+{
     $earthRadius = 6371000; // meters
-    
+
     $lat1Rad = deg2rad($lat1);
     $lat2Rad = deg2rad($lat2);
     $deltaLat = deg2rad($lat2 - $lat1);
     $deltaLng = deg2rad($lng2 - $lng1);
-    
+
     $a = sin($deltaLat / 2) * sin($deltaLat / 2) +
-         cos($lat1Rad) * cos($lat2Rad) *
-         sin($deltaLng / 2) * sin($deltaLng / 2);
-    
+        cos($lat1Rad) * cos($lat2Rad) *
+        sin($deltaLng / 2) * sin($deltaLng / 2);
+
     $c = 2 * atan2(sqrt($a), sqrt(1 - $a));
-    
+
     return $earthRadius * $c;
 }
 ?>

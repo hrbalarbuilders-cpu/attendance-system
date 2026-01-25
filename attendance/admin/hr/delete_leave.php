@@ -1,11 +1,11 @@
 <?php
 include '../config/db.php';
 
-$leave_id = isset($_POST['leave_id']) ? (int)$_POST['leave_id'] : 0;
+$leave_id = isset($_POST['leave_id']) ? (int) $_POST['leave_id'] : 0;
 
 if ($leave_id > 0) {
     // Get leave details
-    $stmt = $con->prepare("SELECT employee_id, from_date, to_date FROM leave_applications WHERE id = ?");
+    $stmt = $con->prepare("SELECT user_id, from_date, to_date FROM leave_applications WHERE id = ?");
     $stmt->bind_param('i', $leave_id);
     $stmt->execute();
     $stmt->bind_result($emp_id, $from_date, $to_date);
@@ -25,7 +25,7 @@ if ($leave_id > 0) {
         for ($d = $start; $d < $end; $d->modify('+1 day')) {
             $dateStr = $d->format('Y-m-d');
             $delLog = $con->prepare("DELETE FROM attendance_logs WHERE user_id = ? AND type = 'leave' AND DATE(time) = ?");
-            $emp_id_str = (string)$emp_id;
+            $emp_id_str = (string) $emp_id;
             $delLog->bind_param('ss', $emp_id_str, $dateStr);
             $delLog->execute();
             $delLog->close();

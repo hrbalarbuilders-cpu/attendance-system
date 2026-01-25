@@ -5,7 +5,7 @@ header('Content-Type: application/json');
 include "db.php";
 
 // Get user_id from GET parameter
-$user_id = isset($_GET['user_id']) ? (int)$_GET['user_id'] : 0;
+$user_id = isset($_GET['user_id']) ? (int) $_GET['user_id'] : 0;
 $date = isset($_GET['date']) ? trim($_GET['date']) : date('Y-m-d'); // Default to today
 
 if ($user_id <= 0) {
@@ -51,7 +51,7 @@ $lateMinutes = 0;
 
 while ($row = $result->fetch_assoc()) {
     $logs[] = $row;
-    
+
     // Get first clock in and last clock out
     if ($row['type'] == 'in' && $clockInTime == null) {
         $clockInTime = $row['time'];
@@ -65,12 +65,12 @@ while ($row = $result->fetch_assoc()) {
 // If we have logs, compute gross/break/effective/late minutes similar to get_day_summary
 if (!empty($logs)) {
     // Get employee shift info for late calculation and shift end
-    $empCodePattern = "EMP" . str_pad((string)$user_id, 3, '0', STR_PAD_LEFT);
+    $empCodePattern = "EMP" . str_pad((string) $user_id, 3, '0', STR_PAD_LEFT);
     $shiftStmt = $con->prepare("
-        SELECT e.id, s.start_time, s.end_time, s.late_mark_after
+        SELECT e.user_id, s.start_time, s.end_time, s.late_mark_after
         FROM employees e
         LEFT JOIN shifts s ON e.shift_id = s.id
-        WHERE (e.emp_code = ? OR e.id = ?) AND e.status = 1
+        WHERE (e.emp_code = ? OR e.user_id = ?) AND e.status = 1
         LIMIT 1
     ");
 
@@ -87,7 +87,7 @@ if (!empty($logs)) {
             $shiftStartTime = $shiftRow['start_time'];
             $shiftEndTime = $shiftRow['end_time'];
             $lateMarkAfter = isset($shiftRow['late_mark_after'])
-                ? (int)$shiftRow['late_mark_after']
+                ? (int) $shiftRow['late_mark_after']
                 : 30;
         }
         $shiftStmt->close();
@@ -109,7 +109,7 @@ if (!empty($logs)) {
         if ($lastOutTime) {
             // Normal case: we have a final OUT
             $diff = $lastOutTime->diff($firstInTime);
-            $grossMinutes = (int)$diff->format('%h') * 60 + (int)$diff->format('%i');
+            $grossMinutes = (int) $diff->format('%h') * 60 + (int) $diff->format('%i');
         } elseif ($shiftEndTime) {
             // No clock-out yet: approximate end at min(shift end, now)
             $shiftEnd = new DateTime($date . ' ' . $shiftEndTime);
@@ -118,7 +118,7 @@ if (!empty($logs)) {
 
             if ($effectiveEnd > $firstInTime) {
                 $diff = $effectiveEnd->diff($firstInTime);
-                $grossMinutes = (int)$diff->format('%h') * 60 + (int)$diff->format('%i');
+                $grossMinutes = (int) $diff->format('%h') * 60 + (int) $diff->format('%i');
             }
         }
     }
@@ -129,7 +129,7 @@ if (!empty($logs)) {
             $outTime = new DateTime($logs[$i]['time']);
             $inTime = new DateTime($logs[$i + 1]['time']);
             $diff = $inTime->diff($outTime);
-            $breakMinutes += (int)$diff->format('%h') * 60 + (int)$diff->format('%i');
+            $breakMinutes += (int) $diff->format('%h') * 60 + (int) $diff->format('%i');
         }
     }
 
@@ -141,7 +141,7 @@ if (!empty($logs)) {
 
         if ($firstInTime > $gracePeriod) {
             $diff = $firstInTime->diff($shiftStart);
-            $lateMinutes = (int)$diff->format('%h') * 60 + (int)$diff->format('%i');
+            $lateMinutes = (int) $diff->format('%h') * 60 + (int) $diff->format('%i');
         }
     }
 }
@@ -191,4 +191,3 @@ echo json_encode([
 
 $stmt->close();
 ?>
-

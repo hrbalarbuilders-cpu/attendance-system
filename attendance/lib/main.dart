@@ -1,12 +1,31 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'screens/login_screen.dart';
+import 'screens/attendance_screen.dart';
+import 'widgets/connectivity_wrapper.dart';
+import 'services/geofence_service.dart';
 
-void main() {
-  runApp(const MyApp());
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // Early permission check for already logged-in users
+  final prefs = await SharedPreferences.getInstance();
+  final bool isLoggedIn = prefs.getBool('is_logged_in') ?? false;
+
+  if (isLoggedIn) {
+    // Check if essential permissions are missing
+    // We don't want to show complex UI here, just trigger the request
+    // AppGeofenceService().initialize() will handle the detailed UI in AttendanceScreen if needed,
+    // but let's ensure the requests happen.
+    await AppGeofenceService().initialize();
+  }
+
+  runApp(MyApp(isLoggedIn: isLoggedIn));
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  final bool isLoggedIn;
+  const MyApp({super.key, required this.isLoggedIn});
 
   @override
   Widget build(BuildContext context) {
@@ -35,7 +54,8 @@ class MyApp extends StatelessWidget {
           margin: const EdgeInsets.symmetric(vertical: 8),
         ),
       ),
-      home: const LoginScreen(),
+      builder: (context, child) => ConnectivityWrapper(child: child!),
+      home: isLoggedIn ? const AttendanceScreen() : const LoginScreen(),
     );
   }
 }

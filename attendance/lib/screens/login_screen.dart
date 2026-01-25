@@ -6,6 +6,10 @@ import 'dart:convert';
 import 'dart:async';
 import 'attendance_screen.dart';
 import 'package:attendance/config.dart';
+import '../services/geofence_service.dart';
+import '../services/location_service.dart';
+import 'package:flutter/services.dart';
+import 'dart:io';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -22,6 +26,45 @@ class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkPermissionsAtStartup();
+    });
+  }
+
+  Future<void> _checkPermissionsAtStartup() async {
+    final missing = await LocationService.ensureAllPermissions();
+    if (missing != null && mounted) {
+      _showPermissionDialog(missing);
+    }
+  }
+
+  void _showPermissionDialog(String missing) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Text('Permissions Required'),
+        content: Text(
+          'This app requires $missing to function correctly for attendance tracking.\n\n'
+          'If you deny these permissions, the app will close.',
+        ),
+        actions: [
+          TextButton(onPressed: () => exit(0), child: const Text('Exit App')),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _checkPermissionsAtStartup();
+            },
+            child: const Text('Try Again'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
@@ -34,6 +77,14 @@ class _LoginScreenState extends State<LoginScreen> {
     }
 
     setState(() => _isLoading = true);
+
+    // Final permission check before login
+    final missing = await LocationService.ensureAllPermissions();
+    if (missing != null) {
+      setState(() => _isLoading = false);
+      _showPermissionDialog(missing);
+      return;
+    }
 
     try {
       final dynamic conn = await Connectivity().checkConnectivity();
@@ -73,6 +124,9 @@ class _LoginScreenState extends State<LoginScreen> {
           await prefs.setString('user_email', data['email']);
           await prefs.setBool('is_logged_in', true);
 
+          // Initialize Geofence service for background attendance
+          await AppGeofenceService().initialize();
+
           // Navigate to attendance screen
           if (mounted) {
             Navigator.of(context).pushReplacement(
@@ -87,7 +141,8 @@ class _LoginScreenState extends State<LoginScreen> {
         setState(() => _isLoading = false);
 
         // Try to extract a useful message from non-200 responses
-        String message = "Server error (${response.statusCode}). Please try again.";
+        String message =
+            "Server error (${response.statusCode}). Please try again.";
         try {
           final decoded = jsonDecode(response.body);
           if (decoded is Map && decoded['msg'] is String) {
@@ -137,7 +192,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     borderRadius: BorderRadius.circular(24),
                     boxShadow: [
                       BoxShadow(
-                        color: Color.fromRGBO(0,0,0,0.05),
+                        color: Color.fromRGBO(0, 0, 0, 0.05),
                         blurRadius: 16,
                         offset: const Offset(0, 8),
                       ),
@@ -150,15 +205,16 @@ class _LoginScreenState extends State<LoginScreen> {
                         'assets/logo.png',
                         height: 64,
                         width: 64,
-                        errorBuilder: (context, error, stackTrace) => const FlutterLogo(size: 64),
+                        errorBuilder: (context, error, stackTrace) =>
+                            const FlutterLogo(size: 64),
                       ),
                       const SizedBox(height: 12),
                       Text(
                         'Attendance System',
                         style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                              fontWeight: FontWeight.bold,
-                              color: Colors.indigo[700],
-                            ),
+                          fontWeight: FontWeight.bold,
+                          color: Colors.indigo[700],
+                        ),
                       ),
                     ],
                   ),
@@ -167,9 +223,14 @@ class _LoginScreenState extends State<LoginScreen> {
                 // ...existing code...
                 Card(
                   elevation: 3,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20),
+                  ),
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 24,
+                      vertical: 32,
+                    ),
                     child: Form(
                       key: _formKey,
                       child: Column(
@@ -177,9 +238,8 @@ class _LoginScreenState extends State<LoginScreen> {
                         children: [
                           Text(
                             'Sign in to your account',
-                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                  fontWeight: FontWeight.w600,
-                                ),
+                            style: Theme.of(context).textTheme.titleMedium
+                                ?.copyWith(fontWeight: FontWeight.w600),
                             textAlign: TextAlign.center,
                           ),
                           const SizedBox(height: 24),
@@ -188,7 +248,9 @@ class _LoginScreenState extends State<LoginScreen> {
                             keyboardType: TextInputType.emailAddress,
                             decoration: InputDecoration(
                               labelText: 'Email',
-                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
                               prefixIcon: const Icon(Icons.email),
                               filled: true,
                               fillColor: Colors.grey[50],
@@ -197,7 +259,9 @@ class _LoginScreenState extends State<LoginScreen> {
                               if (value == null || value.isEmpty) {
                                 return 'Please enter your email';
                               }
-                              if (!RegExp(r'^[^@]+@[^@]+\.[^@]+').hasMatch(value)) {
+                              if (!RegExp(
+                                r'^[^@]+@[^@]+\.[^@]+',
+                              ).hasMatch(value)) {
                                 return 'Enter a valid email';
                               }
                               return null;
@@ -209,12 +273,18 @@ class _LoginScreenState extends State<LoginScreen> {
                             obscureText: _obscurePassword,
                             decoration: InputDecoration(
                               labelText: 'Password',
-                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
                               prefixIcon: const Icon(Icons.lock),
                               filled: true,
                               fillColor: Colors.grey[50],
                               suffixIcon: IconButton(
-                                icon: Icon(_obscurePassword ? Icons.visibility : Icons.visibility_off),
+                                icon: Icon(
+                                  _obscurePassword
+                                      ? Icons.visibility
+                                      : Icons.visibility_off,
+                                ),
                                 onPressed: () {
                                   setState(() {
                                     _obscurePassword = !_obscurePassword;
@@ -249,9 +319,18 @@ class _LoginScreenState extends State<LoginScreen> {
                                   ? const SizedBox(
                                       width: 24,
                                       height: 24,
-                                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: Colors.white,
+                                      ),
                                     )
-                                  : const Text('Login', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                                  : const Text(
+                                      'Login',
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
                             ),
                           ),
                         ],
