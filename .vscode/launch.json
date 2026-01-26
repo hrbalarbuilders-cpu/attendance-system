@@ -5,13 +5,21 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "attendance (Prod API)",
-            "cwd": "attendance",
+            "name": "Production (Alwaysdata)",
             "request": "launch",
             "type": "dart",
+            "flutterMode": "debug",
             "args": [
-                "--target=lib/main.dart",
-                "--dart-define=API_BASE_URL=https://demosoftware.kesug.com/attendance-system/attendance/attendance_api/login.php/"
+                "--dart-define=API_BASE_URL=https://demoserver.alwaysdata.net/attendance_api/"
+            ]
+        },
+        {
+            "name": "Release (Alwaysdata)",
+            "request": "launch",
+            "type": "dart",
+            "flutterMode": "release",
+            "args": [
+                "--dart-define=API_BASE_URL=https://demoserver.alwaysdata.net/attendance_api/"
             ]
         },
         {

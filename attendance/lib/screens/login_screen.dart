@@ -10,6 +10,7 @@ import '../services/geofence_service.dart';
 import '../services/location_service.dart';
 import 'package:flutter/services.dart';
 import 'dart:io';
+import 'package:permission_handler/permission_handler.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -47,15 +48,25 @@ class _LoginScreenState extends State<LoginScreen> {
       builder: (context) => AlertDialog(
         title: const Text('Permissions Required'),
         content: Text(
-          'This app requires $missing to function correctly for attendance tracking.\n\n'
-          'If you deny these permissions, the app will close.',
+          'This app requires $missing to function.\n\n'
+          '1. Application Info will open\n'
+          '2. Tap "Permissions"\n'
+          '3. Tap "Location"\n'
+          '4. Select "Allow all the time"',
         ),
         actions: [
           TextButton(onPressed: () => exit(0), child: const Text('Exit App')),
           ElevatedButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.pop(context);
-              _checkPermissionsAtStartup();
+              // Try to get permissions naturally
+              final missing = await LocationService.ensureAllPermissions();
+              if (missing != null && mounted) {
+                // If still missing, FORCE open settings
+                await openAppSettings();
+                // Check again to show dialog if they return without fixing
+                _checkPermissionsAtStartup();
+              }
             },
             child: const Text('Try Again'),
           ),
@@ -109,7 +120,17 @@ class _LoginScreenState extends State<LoginScreen> {
             },
           )
           .timeout(const Duration(seconds: 10));
-      // debug prints removed
+
+      // Debug prints
+      print('==== API DEBUG ====');
+      print('URL: ${kBaseUri.resolve('login.php')}');
+      print('Status: ${response.statusCode}');
+      print('Body: ${response.body}');
+      print('Body Length: ${response.body.length}');
+      print(
+        'First 20 bytes (hex): ${response.bodyBytes.take(20).map((b) => b.toRadixString(16).padLeft(2, '0')).join(' ')}',
+      );
+      print('==================');
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);

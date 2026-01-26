@@ -152,20 +152,29 @@ class LocationService {
   /// Force request of all permissions required for the app to function.
   /// Returns null if all granted, otherwise returns error message.
   static Future<String?> ensureAllPermissions() async {
-    // 1. Basic Location
+    // 1. Basic Location (When In Use)
+    // We MUST request this first before asking for Always
     final locStatus = await Geolocator.checkPermission();
     if (locStatus == LocationPermission.denied) {
       await Geolocator.requestPermission();
     }
 
-    // 2. Notifications
-    await ph.Permission.notification.request();
+    // 2. Notifications (Android 13+)
+    if (Platform.isAndroid) {
+      await ph.Permission.notification.request();
+    }
 
-    // 3. Activity Recognition
+    // 3. Activity Recognition (Mandatory for geofencing)
     await ph.Permission.activityRecognition.request();
 
-    // 4. Background Location (Step 2 of location)
-    if (await Geolocator.checkPermission() != LocationPermission.always) {
+    // 4. Background Location (Always)
+    // On Android 11+, this will take the user to the Settings page automatically
+    // if 'Always' is not already granted.
+    var currentPerm = await Geolocator.checkPermission();
+    if (currentPerm == LocationPermission.whileInUse ||
+        currentPerm == LocationPermission.denied ||
+        currentPerm == LocationPermission.deniedForever) {
+      // Requesting permission again here triggers the "Allow all the time" / Settings flow
       await Geolocator.requestPermission();
     }
 
@@ -173,9 +182,12 @@ class LocationService {
     final finalLoc = await Geolocator.checkPermission();
     final finalActivity = await ph.Permission.activityRecognition.status;
 
-    if (finalLoc != LocationPermission.always)
+    if (finalLoc != LocationPermission.always) {
       return 'Location (Set to Always Allow)';
-    if (!finalActivity.isGranted) return 'Physical Activity Recognition';
+    }
+    if (!finalActivity.isGranted) {
+      return 'Physical Activity Recognition';
+    }
 
     return null;
   }

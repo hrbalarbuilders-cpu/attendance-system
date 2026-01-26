@@ -1,6 +1,14 @@
 <?php
+// Start output buffering to catch any accidental output
+ob_start();
+
+// Set timezone and headers
 date_default_timezone_set('Asia/Kolkata');
-header('Content-Type: application/json');
+header('Content-Type: application/json; charset=utf-8');
+header('Cache-Control: no-cache, must-revalidate');
+
+// Clean any output that might have been captured
+ob_clean();
 
 include "db.php";
 
@@ -92,4 +100,4 @@ if ($result && $result->num_rows > 0) {
 }
 
 $stmt->close();
-?>
+// NO CLOSING PHP TAG - This prevents BOM and whitespace issues!

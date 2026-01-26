@@ -584,4 +584,9 @@ if ($adminPos !== false) {
       }
     });
   }
+
+  // Fixed Title for the entire Software
+  (function () {
+    document.title = 'Demo Software';
+  })();
 </script>
