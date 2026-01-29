@@ -8,6 +8,9 @@ include_once __DIR__ . '/../config/db.php';
   <meta charset="utf-8">
   <title>Looking For</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <!-- Design System CSS -->
+  <link rel="stylesheet" href="../css/design-system.css?v=1.1">
+  <link rel="stylesheet" href="../css/components.css?v=1.1">
   <style>
     body {
       background: #f3f5fb;
@@ -81,7 +84,7 @@ include_once __DIR__ . '/../config/db.php';
           document.querySelectorAll('.btn-edit-lf').forEach(btn => btn.addEventListener('click', function () {
             const tr = this.closest('tr'); const id = tr ? tr.dataset.id : null; if (!id) return;
             fetch('get_looking_for.php?id=' + encodeURIComponent(id)).then(r => r.json()).then(j => {
-              if (!j.success) { alert(j.message || 'Failed'); return; }
+              if (!j.success) { showStatus(j.message || 'Failed to load looking for item', 'danger'); return; }
               const d = j.data || {};
               document.getElementById('lookingForId').value = d.id ?? '';
               document.getElementById('lookingForName').value = d.name ?? '';
@@ -96,7 +99,7 @@ include_once __DIR__ . '/../config/db.php';
             });
           }));
 
-          document.querySelectorAll('.btn-delete-lf').forEach(btn => btn.addEventListener('click', function () { const tr = this.closest('tr'); const id = tr ? tr.dataset.id : null; if (!id) return; if (!confirm('Delete?')) return; fetch('delete_looking_for.php', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'id=' + encodeURIComponent(id) }).then(r => r.json()).then(j => { alert(j.message || (j.success ? 'Deleted' : 'Error')); if (j.success) loadLF(currentLFPage); }); }));
+          document.querySelectorAll('.btn-delete-lf').forEach(btn => btn.addEventListener('click', function () { const tr = this.closest('tr'); const id = tr ? tr.dataset.id : null; if (!id) return; if (!confirm('Delete?')) return; fetch('delete_looking_for.php', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'id=' + encodeURIComponent(id) }).then(r => r.json()).then(j => { showStatus(j.message || (j.success ? 'Deleted successfully' : 'Error deleting item'), j.success ? 'success' : 'danger'); if (j.success) loadLF(currentLFPage); }); }));
         }
 
   function attachLFPagination() { document.querySelectorAll('.lf-page-link').forEach(a => a.addEventListener('click', function (e) { e.preventDefault(); var p = parseInt(this.dataset.page, 10) || 1; loadLF(p); })); }
@@ -131,7 +134,7 @@ include_once __DIR__ . '/../config/db.php';
         document.querySelectorAll('.lf-type-group').forEach(function (g) { var tnameEl = g.querySelector('input[name="type_name[]"]'); var tname = tnameEl ? tnameEl.value.trim() : ''; if (!tname) return; var subs = []; g.querySelectorAll('.lf-subtypes input').forEach(function (si) { if (si.value && si.value.trim()) subs.push(si.value.trim()); }); types.push({ name: tname, subtypes: subs }); });
         document.getElementById('typesJson').value = JSON.stringify(types);
         var fd = new FormData(this);
-        fetch(url, { method: 'POST', body: fd }).then(r => r.json()).then(j => { alert(j.message || (j.success ? 'Saved' : 'Error')); if (j.success) { if (lfModal) lfModal.hide(); loadLF(1); } });
+        fetch(url, { method: 'POST', body: fd }).then(r => r.json()).then(j => { showStatus(j.message || (j.success ? 'Saved successfully' : 'Error saving item'), j.success ? 'success' : 'danger'); if (j.success) { if (lfModal) lfModal.hide(); loadLF(1); } });
       });
 
       document.addEventListener('DOMContentLoaded', function () { initLFHandlers(); attachLFPagination(); var foot = document.getElementById('lfPerPageFooter'); if (foot) { foot.value = currentLFPerPage; foot.onchange = function () { currentLFPerPage = parseInt(this.value, 10) || 10; loadLF(1); }; } loadLF(1); });

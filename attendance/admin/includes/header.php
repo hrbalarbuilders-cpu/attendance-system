@@ -4,7 +4,20 @@ if (session_status() === PHP_SESSION_NONE) {
 }
 $isLoggedIn = isset($_SESSION['emp_id']) && $_SESSION['emp_id'] > 0;
 $loggedInName = isset($_SESSION['emp_name']) ? $_SESSION['emp_name'] : '';
+
+// Calculate path to CSS folder
+$scriptPath = str_replace('\\', '/', $_SERVER['SCRIPT_NAME']);
+$adminPos = strpos($scriptPath, '/admin');
+if ($adminPos !== false) {
+  $cssBase = substr($scriptPath, 0, $adminPos + strlen('/admin')) . '/css';
+} else {
+  $cssBase = rtrim(dirname($scriptPath), '/') . '/css';
+}
 ?>
+<!-- Design System CSS -->
+<link rel="stylesheet" href="<?php echo $cssBase; ?>/design-system.css?v=1.0">
+<link rel="stylesheet" href="<?php echo $cssBase; ?>/components.css?v=1.0">
+
 <!-- Global Header with Apps Dropdown -->
 <style>
   .header-fixed {
@@ -599,6 +612,12 @@ if ($adminPos !== false) {
       window.location.href = '<?php echo $base; ?>/dashboard/index.php';
     }
   });
+</script>
+<?php
+// Global status toast notification system (v2 - with URL cleanup)
+include_once __DIR__ . '/status-toast.php';
+?>
+<script>
 
   // Check if we stay or leave based on shared state
   if (localStorage.getItem('admin_logged_out') && !window.location.pathname.includes('login.php')) {

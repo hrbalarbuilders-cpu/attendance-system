@@ -1,21 +1,5 @@
-let statusTimer;
-
-// toast function
-function showStatus(message, type = 'success') {
-    const box = document.getElementById('statusAlert');
-    const text = document.getElementById('statusAlertText');
-    if (!box || !text) return;
-
-    text.textContent = message;
-
-    box.classList.remove('d-none', 'alert-success', 'alert-danger', 'd-flex');
-    box.classList.add(type === 'danger' ? 'alert-danger' : 'alert-success', 'd-flex');
-
-    if (statusTimer) clearTimeout(statusTimer);
-    statusTimer = setTimeout(() => {
-        box.classList.add('d-none');
-    }, 2500);
-}
+// NOTE: showStatus() is now globally available from /includes/status-toast.php
+// It's loaded in header.php before this script, so no need to redefine it here.
 
 // loader helpers
 function showLoader() {
@@ -36,7 +20,6 @@ function toISODate(d) {
 }
 
 // Global scope expose
-window.showStatus = showStatus;
 window.showLoader = showLoader;
 window.hideLoader = hideLoader;
 window.toISODate = toISODate;

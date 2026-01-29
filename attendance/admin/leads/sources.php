@@ -11,6 +11,9 @@ include_once __DIR__ . '/../config/db.php';
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Source of Leads</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <!-- Design System CSS -->
+  <link rel="stylesheet" href="../css/design-system.css?v=1.1">
+  <link rel="stylesheet" href="../css/components.css?v=1.1">
   <style>
     body {
       background: #f3f5fb;
@@ -92,7 +95,10 @@ include_once __DIR__ . '/../config/db.php';
       document.querySelectorAll('.btn-edit-source').forEach(btn => btn.addEventListener('click', function () {
         const tr = this.closest('tr'); const id = tr ? tr.dataset.id : null; if (!id) return;
         fetch('get_source.php?id=' + encodeURIComponent(id)).then(r => r.json()).then(j => {
-          if (!j.success) { alert(j.message || 'Failed to load'); return; }
+          if (!j.success) {
+            showStatus(j.message || 'Failed to load source', 'danger');
+            return;
+          }
           const d = j.data || {};
           document.getElementById('sourceId').value = d.id ?? '';
           document.getElementById('sourceName').value = d.name ?? '';
@@ -109,7 +115,10 @@ include_once __DIR__ . '/../config/db.php';
       document.querySelectorAll('.btn-delete-source').forEach(btn => btn.addEventListener('click', function () {
         const tr = this.closest('tr'); const id = tr ? tr.dataset.id : null; if (!id) return; if (!confirm('Delete this source?')) return;
         fetch('delete_source.php', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'id=' + encodeURIComponent(id) })
-          .then(r => r.json()).then(j => { alert(j.message || (j.success ? 'Deleted' : 'Error')); if (j.success) loadSources(); });
+          .then(r => r.json()).then(j => {
+            showStatus(j.message || (j.success ? 'Source deleted successfully' : 'Error deleting source'), j.success ? 'success' : 'danger');
+            if (j.success) loadSources();
+          });
       }));
     }
 
@@ -117,7 +126,10 @@ include_once __DIR__ . '/../config/db.php';
 
     document.getElementById('sourceForm').addEventListener('submit', function (e) {
       e.preventDefault(); const id = document.getElementById('sourceId').value; const url = id ? 'update_source.php' : 'create_source.php'; const fd = new FormData(this);
-      fetch(url, { method: 'POST', body: fd }).then(r => r.json()).then(j => { alert(j.message || (j.success ? 'Saved' : 'Error')); if (j.success) { sourceModal.hide(); loadSources(); } });
+      fetch(url, { method: 'POST', body: fd }).then(r => r.json()).then(j => {
+        showStatus(j.message || (j.success ? 'Source saved successfully' : 'Error saving source'), j.success ? 'success' : 'danger');
+        if (j.success) { sourceModal.hide(); loadSources(); }
+      });
     });
 
     document.addEventListener('DOMContentLoaded', () => {

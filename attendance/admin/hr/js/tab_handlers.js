@@ -204,11 +204,29 @@ function initLeavesTabEvents() {
     perSel.value = String(per);
 
     function loadLeavesPage(p, perPage) {
-        var tabBtn = document.querySelector('[data-page^="leaves_tab.php"]');
         var url = 'leaves_tab.php?ajax=1'
             + '&page=' + encodeURIComponent(p)
             + '&per_page=' + encodeURIComponent(perPage);
-        loadPage(url, tabBtn);
+
+        showLoader();
+        fetch(url)
+            .then(function (res) { return res.text(); })
+            .then(function (html) {
+                var contentArea = document.getElementById('contentArea');
+                if (contentArea) {
+                    contentArea.innerHTML = html;
+                    // Re-initialize events after content reload
+                    if (typeof initLeavesTabEvents === 'function') {
+                        initLeavesTabEvents();
+                    }
+                }
+            })
+            .catch(function (err) {
+                console.error('Failed to load leaves:', err);
+            })
+            .finally(function () {
+                hideLoader();
+            });
     }
 
     perSel.onchange = function () {
@@ -253,7 +271,23 @@ function initLeavesTabEvents() {
                     method: 'POST',
                     body: new FormData(formEl)
                 })
-                    .then(function (res) { return res.json(); })
+                    .then(function (res) {
+                        // Check if response is ok
+                        if (!res.ok) {
+                            throw new Error('HTTP error ' + res.status);
+                        }
+                        return res.text();
+                    })
+                    .then(function (text) {
+                        // Try to parse JSON, log raw response if it fails
+                        try {
+                            return JSON.parse(text);
+                        } catch (e) {
+                            console.error('JSON Parse Error:', e);
+                            console.error('Raw response:', text);
+                            throw new Error('Invalid JSON response from server');
+                        }
+                    })
                     .then(function (data) {
                         if (data && data.success) {
                             try {
@@ -274,8 +308,9 @@ function initLeavesTabEvents() {
                             showStatus((data && data.message) ? data.message : 'Failed to apply leave.', 'danger');
                         }
                     })
-                    .catch(function () {
-                        showStatus('Failed to apply leave.', 'danger');
+                    .catch(function (err) {
+                        console.error('Leave application error:', err);
+                        showStatus('Failed to apply leave: ' + (err.message || 'Unknown error'), 'danger');
                     })
                     .finally(function () {
                         if (submitBtn) submitBtn.disabled = false;

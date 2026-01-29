@@ -1,6 +1,10 @@
 <?php
-header('Content-Type: application/json');
 include_once __DIR__ . '/../config/db.php';
+
+// Clean output buffer for proper JSON response
+if (ob_get_level())
+  ob_clean();
+header('Content-Type: application/json');
 $out = ['employees' => []];
 $q = isset($_GET['q']) ? trim($_GET['q']) : '';
 $where = '';

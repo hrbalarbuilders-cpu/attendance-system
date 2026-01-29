@@ -1,10 +1,12 @@
 <?php
 // delete_attendance_log.php - Clean JSON output version
+// CRITICAL: Authentication required for security
 error_reporting(0);
 ini_set('display_errors', 0);
 ob_start();
 
 date_default_timezone_set('Asia/Kolkata');
+include '../includes/auth_check.php';
 include '../config/db.php';
 
 $output = ['success' => false, 'message' => 'Unknown error'];

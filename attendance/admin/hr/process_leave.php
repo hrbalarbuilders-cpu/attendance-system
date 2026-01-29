@@ -1,5 +1,7 @@
 <?php
 // Process leave approval or rejection
+// CRITICAL: Authentication required for security
+include '../includes/auth_check.php';
 include '../config/db.php';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -50,5 +52,5 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 $con->close();
-header('Location: leaves_admin.php');
+header('Location: leaves.php?status=success');
 exit;

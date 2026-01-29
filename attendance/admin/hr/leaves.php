@@ -33,18 +33,6 @@ if ($isAjax) {
             <div class="loader-spinner"></div>
         </div>
 
-        <!-- toast -->
-        <div id="statusAlertWrapper" class="position-fixed start-50 translate-middle-x p-3">
-            <div id="statusAlert"
-                class="alert alert-success shadow-sm d-none align-items-center justify-content-between mb-0 text-center"
-                role="alert">
-                <span id="statusAlertText"></span>
-                <button type="button" class="btn-close ms-2" aria-label="Close"
-                    onclick="document.getElementById('statusAlert').classList.add('d-none');">
-                </button>
-            </div>
-        </div>
-
         <div class="container-fluid py-3 d-flex justify-content-center" style="padding-top:72px;">
             <div class="page-wrapper w-100">
 
@@ -65,6 +53,9 @@ if ($isAjax) {
             </div>
         </div>
 
+        <!-- Shared HR Modals -->
+        <?php include __DIR__ . '/../includes/hr-modals.php'; ?>
+
         <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
         <script>
@@ -72,6 +63,14 @@ if ($isAjax) {
                 // Initial init for leaves tab
                 if (typeof initLeavesTabEvents === 'function') {
                     initLeavesTabEvents();
+                }
+
+                // Check for status parameter in URL
+                const urlParams = new URLSearchParams(window.location.search);
+                if (urlParams.get('status') === 'success') {
+                    if (typeof showStatus === 'function') {
+                        showStatus('Leave request processed successfully.', 'success');
+                    }
                 }
             });
         </script>

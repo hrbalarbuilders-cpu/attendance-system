@@ -1,8 +1,13 @@
 <?php
 // save_admin_attendance.php
+// CRITICAL: Authentication required for security
 date_default_timezone_set('Asia/Kolkata');
+include '../includes/auth_check.php';
 include '../config/db.php';
 
+// Clean any output buffer to ensure clean JSON response
+if (ob_get_level())
+    ob_clean();
 header('Content-Type: application/json');
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {

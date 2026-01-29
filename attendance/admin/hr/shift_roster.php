@@ -440,6 +440,9 @@ if ($ajax) {
       </div>
     </div>
 
+    <!-- Shared HR Modals -->
+    <?php include __DIR__ . '/../includes/hr-modals.php'; ?>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="js/utils.js"></script>
     <script src="js/tab_handlers.js"></script>

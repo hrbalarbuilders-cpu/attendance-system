@@ -41,7 +41,11 @@ $stmt->execute();
 $empRes = $stmt->get_result();
 
 if (!$empRes || $empRes->num_rows === 0) {
-    echo json_encode(['status' => 'error', 'msg' => 'Employee not found or inactive']);
+    echo json_encode([
+        'status' => 'error',
+        'msg' => 'Employee not found or inactive',
+        'inactive' => true
+    ]);
     $stmt->close();
     exit;
 }

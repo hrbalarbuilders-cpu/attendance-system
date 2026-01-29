@@ -8,6 +8,9 @@ include_once __DIR__ . '/../config/db.php';
   <meta charset="utf-8">
   <title>Sales Persons</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <!-- Design System CSS (loaded here since header.php is in body) -->
+  <link rel="stylesheet" href="../css/design-system.css?v=1.1">
+  <link rel="stylesheet" href="../css/components.css?v=1.1">
   <style>
     body {
       background: #f3f5fb;
@@ -37,6 +40,8 @@ include_once __DIR__ . '/../config/db.php';
     .dropdown-menu {
       z-index: 5005;
     }
+
+    /* Modal z-index is now handled globally in components.css */
   </style>
 </head>
 
@@ -132,7 +137,7 @@ include_once __DIR__ . '/../config/db.php';
         document.getElementById('spList').innerHTML = out;
         // sync footer select value and wire change
         var foot = document.getElementById('spPerPageFooter'); if (foot) { foot.value = currentSPPerPage; foot.onchange = function () { currentSPPerPage = parseInt(this.value, 10) || 10; loadSP(1); }; }
-        document.querySelectorAll('.btn-del-sp').forEach(function (b) { b.addEventListener('click', function () { if (!confirm('Delete?')) return; fetch('delete_sales_person.php', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'id=' + encodeURIComponent(this.dataset.id) }).then(r => r.json()).then(j => { if (j.success) loadSP(currentSPPage); else alert(j.message || 'Error'); }); }); });
+        document.querySelectorAll('.btn-del-sp').forEach(function (b) { b.addEventListener('click', function () { if (!confirm('Delete?')) return; fetch('delete_sales_person.php', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'id=' + encodeURIComponent(this.dataset.id) }).then(r => r.json()).then(j => { if (j.success) { showStatus('Sales person deleted successfully', 'success'); loadSP(currentSPPage); } else showStatus(j.message || 'Error deleting sales person', 'danger'); }); }); });
         document.querySelectorAll('.sp-page-link').forEach(function (a) { a.addEventListener('click', function (e) { e.preventDefault(); var p = parseInt(this.dataset.page, 10) || 1; loadSP(p); }); });
         // header per-page removed; footer-only control handled above
       });
@@ -148,8 +153,33 @@ include_once __DIR__ . '/../config/db.php';
         // fallback: keep select empty
       });
     }
-    document.getElementById('btnAddSP').addEventListener('click', function () { loadEmployeesIntoSelect(); var m = new bootstrap.Modal(document.getElementById('spModal')); m.show(); });
-    document.getElementById('spForm').addEventListener('submit', function (e) { e.preventDefault(); var emp = document.getElementById('spEmployee').value; fetch('create_sales_person.php', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'user_id=' + encodeURIComponent(emp) }).then(r => r.json()).then(j => { if (j.success) { loadSP(currentSPPage); var m = bootstrap.Modal.getInstance(document.getElementById('spModal')); if (m) m.hide(); } else alert(j.message || 'Error'); }); });
+    document.getElementById('btnAddSP').addEventListener('click', function () {
+      loadEmployeesIntoSelect();
+      var modalEl = document.getElementById('spModal');
+
+      // CRITICAL FIX: Move modal to body to bypass stacking contexts
+      document.body.appendChild(modalEl);
+
+      var m = new bootstrap.Modal(modalEl, {
+        backdrop: 'static', // prevent click-outside close which can be buggy with manual z-index
+        keyboard: false
+      });
+      m.show();
+
+      // CRITICAL FIX: Manually force z-index on backdrop and modal
+      setTimeout(function () {
+        var backdrops = document.querySelectorAll('.modal-backdrop');
+        backdrops.forEach(function (bd) {
+          bd.style.zIndex = '9998';
+          bd.style.setProperty('z-index', '9998', 'important');
+        });
+
+        modalEl.style.zIndex = '9999';
+        modalEl.style.setProperty('z-index', '9999', 'important');
+        modalEl.style.display = 'block'; // ensure display block
+      }, 50);
+    });
+    document.getElementById('spForm').addEventListener('submit', function (e) { e.preventDefault(); var emp = document.getElementById('spEmployee').value; fetch('create_sales_person.php', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'user_id=' + encodeURIComponent(emp) }).then(r => r.json()).then(j => { if (j.success) { showStatus('Sales person added successfully', 'success'); loadSP(currentSPPage); var m = bootstrap.Modal.getInstance(document.getElementById('spModal')); if (m) m.hide(); } else showStatus(j.message || 'Error adding sales person', 'danger'); }); });
     // search input removed; no search handler
     // header per-page removed; footer-only control is used
     // initial load

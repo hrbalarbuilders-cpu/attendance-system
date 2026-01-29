@@ -4,9 +4,8 @@ include '../includes/auth_check.php';
 date_default_timezone_set('Asia/Kolkata');
 include '../config/db.php';
 
-// flags for toast messages (delete / update)
-$deleted = isset($_GET['deleted']) ? 1 : 0;
-$updated = isset($_GET['updated']) ? 1 : 0;
+// Note: Status messages (deleted/updated/added) are now handled globally
+// by status-toast.php which auto-detects URL parameters
 
 // Check if AJAX - we need to run LIST FETCHING logic but NOT Modal fetching logic.
 $isAjax = isset($_GET['ajax']) && $_GET['ajax'] == '1';
@@ -163,54 +162,35 @@ if ($isAjax) {
           <?php include 'employees_list_fragment.php'; ?>
         </div>
 
-        <!-- Mark Attendance Modal (included via file) -->
-        <?php include __DIR__ . '/../includes/modal-mark-attendance.php'; ?>
+        <!-- Shared HR Modals -->
+        <?php include __DIR__ . '/../includes/hr-modals.php'; ?>
+
+        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+        <script>
+          // PHP se employees array JS me
+          const ALL_EMPLOYEES = <?php echo json_encode($employeesForJs, JSON_UNESCAPED_UNICODE); ?>;
+
+          document.addEventListener('DOMContentLoaded', () => {
+            // Initial init for employees list events (toggle, filter, etc.)
+            if (typeof initEmployeesListEvents === 'function') {
+              initEmployeesListEvents();
+            }
+            // Note: Status messages are now handled globally by status-toast.php
+            // which auto-detects ?deleted=1, ?updated=1, ?added=1 from URL
+          });
+        </script>
+
+        <script src="js/utils.js"></script>
+        <!-- tab_handlers might be generic, but we call specific inits manually now -->
+        <script src="js/tab_handlers.js"></script>
+        <script src="js/shift_time_picker.js"></script>
+        <script src="js/mark_attendance.js"></script>
+        <script src="js/attendance_details.js"></script>
+        <script src="js/form_handlers.js"></script>
+        <script src="js/dashboard.js"></script>
 
       </div>
-    </div>
-
-    <!-- Shared Time Picker Modal for Shift Master -->
-    <?php include __DIR__ . '/../includes/modal-time-picker.php'; ?>
-
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-
-    <script>
-      // PHP se employees array JS me
-      const ALL_EMPLOYEES = <?php echo json_encode($employeesForJs, JSON_UNESCAPED_UNICODE); ?>;
-
-      // success messages from PHP flags (delete / update)
-      const deletedFlag = <?php echo json_encode((bool) $deleted); ?>;
-      const updatedFlag = <?php echo json_encode((bool) $updated); ?>;
-
-      document.addEventListener('DOMContentLoaded', () => {
-        // Initial init for employees list events (toggle, filter, etc.)
-        if (typeof initEmployeesListEvents === 'function') {
-          initEmployeesListEvents();
-        }
-        // If showStatus is available (it should be via utils.js)
-        const checkUtils = setInterval(() => {
-          if (typeof showStatus === 'function') {
-            clearInterval(checkUtils);
-            if (deletedFlag) {
-              showStatus('Employee deleted successfully.', 'success');
-            } else if (updatedFlag) {
-              showStatus('Employee updated successfully.', 'success');
-            }
-          }
-        }, 100);
-      });
-    </script>
-
-    <script src="js/utils.js"></script>
-    <!-- tab_handlers might be generic, but we call specific inits manually now -->
-    <script src="js/tab_handlers.js"></script>
-    <script src="js/shift_time_picker.js"></script>
-    <script src="js/mark_attendance.js"></script>
-    <script src="js/attendance_details.js"></script>
-    <script src="js/form_handlers.js"></script>
-    <script src="js/dashboard.js"></script>
-
-  </div>
 </body>
 
 </html>

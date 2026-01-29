@@ -188,7 +188,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['location_form'])) {
           })
           .catch(err => {
             console.error('Error saving settings:', err);
-            alert('Error saving settings');
+            showStatus('Error saving settings', 'danger');
           });
       });
     }
@@ -274,7 +274,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['location_form'])) {
               loadSettingsTab('leave_settings.php?ajax=1', document.querySelector('[data-page^="leave_settings.php"]'));
             })
             .catch(function () {
-              alert('Error saving leave type.');
+              showStatus('Error saving leave type', 'danger');
             });
         });
       }
@@ -352,7 +352,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['location_form'])) {
               loadSettingsTab('working_from_settings.php?ajax=1', document.querySelector('[data-page^="working_from_settings.php"]'));
             })
             .catch(function () {
-              alert('Error saving working from option.');
+              showStatus('Error saving working from option', 'danger');
             });
         });
       }
@@ -462,7 +462,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['location_form'])) {
               loadSettingsTab('location_settings.php?ajax=1', document.querySelector('[data-page^="location_settings.php"]'));
             })
             .catch(function () {
-              alert('Error saving location.');
+              showStatus('Error saving location', 'danger');
             });
         });
       }
@@ -521,10 +521,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['location_form'])) {
               if (data && data.success && data.reload) {
                 loadSettingsTab(data.reload, document.querySelector('[data-page^="shifts.php"]'));
               } else {
-                alert('Failed to delete shift.');
+                showStatus('Failed to delete shift', 'danger');
               }
             })
-            .catch(function () { alert('Failed to delete shift.'); });
+            .catch(function () { showStatus('Failed to delete shift', 'danger'); });
         });
       });
 
@@ -586,13 +586,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['location_form'])) {
                 return '<li>' + String(m) + '</li>';
               }).join('') + '</ul>';
             } else {
-              alert(data.errors.join(' '));
+              showStatus(data.errors.join(' '), 'danger');
             }
           } else {
-            alert('Error saving shift.');
+            showStatus('Error saving shift', 'danger');
           }
         })
-        .catch(function () { alert('Error saving shift.'); });
+        .catch(function () { showStatus('Error saving shift', 'danger'); });
     });
     document.addEventListener('DOMContentLoaded', function () {
       document.querySelectorAll('.top-nav-pill').forEach(btn => {
@@ -711,7 +711,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['location_form'])) {
     window.applyBulkCoords = function () {
       const raw = document.getElementById('bulk_coords_input').value;
       if (!raw.trim()) {
-        alert("Please paste some coordinates first.");
+        showStatus('Please paste some coordinates first', 'danger');
         return;
       }
 
@@ -725,7 +725,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['location_form'])) {
       }
 
       if (points.length < 3) {
-        alert("I found " + points.length + " points. A polygon needs at least 3 points.");
+        showStatus('I found ' + points.length + ' points. A polygon needs at least 3 points', 'danger');
         return;
       }
 
@@ -739,7 +739,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['location_form'])) {
       // Draw it on the map
       if (window.onLocationEdit) window.onLocationEdit(jsonString);
 
-      alert("Success! " + points.length + " points processed and boundary defined.");
+      showStatus('Success! ' + points.length + ' points processed and boundary defined', 'success');
     };
 
     window.onLocationEdit = function (polygonJson) {

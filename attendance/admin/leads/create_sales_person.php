@@ -1,6 +1,12 @@
 <?php
-header('Content-Type: application/json');
+// CRITICAL: Authentication required
+include_once __DIR__ . '/../includes/auth_check.php';
 include_once __DIR__ . '/../config/db.php';
+
+// Clean output buffer for proper JSON response
+if (ob_get_level())
+    ob_clean();
+header('Content-Type: application/json');
 
 $empId = isset($_POST['user_id']) ? intval($_POST['user_id']) : 0;
 if (!$empId) {

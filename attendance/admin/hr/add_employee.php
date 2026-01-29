@@ -117,7 +117,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       );
 
       if ($stmt->execute()) {
-        echo "<script>alert('Employee added successfully.');window.location='employees.php';</script>";
+        header("Location: employees.php?added=1");
         exit;
       } else {
         $errors[] = "Database error: " . $con->error;

@@ -50,7 +50,7 @@ if ($stmt) {
             "weekoff_days" => $row['weekoff_days'] ?: ''
         ];
     } else {
-        echo json_encode(["status" => "error", "msg" => "User not found"]);
+        echo json_encode(["status" => "error", "msg" => "User disabled", "inactive" => true]);
         exit;
     }
     $stmt->close();

@@ -6,6 +6,9 @@
 	<meta name="viewport" content="width=device-width, initial-scale=1">
 	<title>Leads</title>
 	<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+	<!-- Design System CSS -->
+	<link rel="stylesheet" href="../css/design-system.css?v=1.1">
+	<link rel="stylesheet" href="../css/components.css?v=1.1">
 	<!-- jQuery + Select2 for improved selects in modal -->
 	<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
 	<style>
@@ -122,7 +125,11 @@
 					var now = Date.now();
 					if (window._leadApiLastAlert && (now - window._leadApiLastAlert) < 1500) return;
 					window._leadApiLastAlert = now;
-					alert(msg);
+					if (typeof showStatus === 'function') {
+						showStatus(msg, 'danger');
+					} else {
+						alert(msg);
+					}
 				} catch (e) { }
 			}
 
@@ -158,7 +165,10 @@
 				if (!id) return;
 				var bundleUrl = (window.__leadApiUrls && window.__leadApiUrls.bundle) ? window.__leadApiUrls.bundle : 'get_lead_form_payload.php';
 				fetchJson(bundleUrl + '?id=' + encodeURIComponent(id) + '&per_page=1000').then(function (resp) {
-					if (!resp || resp.success === false) { alert(resp && resp.message ? resp.message : 'Failed to load lead'); return; }
+					if (!resp || resp.success === false) {
+						showStatus(resp && resp.message ? resp.message : 'Failed to load lead', 'danger');
+						return;
+					}
 					var d = resp.lead || {};
 					// Set both snapshot and prefill for modal compatibility (must be set before populating selects)
 					window._pendingLeadPrefillSnapshot = JSON.parse(JSON.stringify(d));
@@ -210,9 +220,10 @@
 					// status
 					try { var st = (d.lead_status || '').toString().toLowerCase(); if (st === 'h') st = 'hot'; if (st === 'c') st = 'cold'; if (st === 'w') st = 'warm'; $('#leadStatus').val(st).trigger('change'); } catch (e) { }
 
-					// finally show modal
 					try { var modalEl = document.getElementById('leadModal'); var m = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl); m.show(); } catch (e) { }
-				}).catch(function () { alert('Failed to load lead'); });
+				}).catch(function () {
+					showStatus('Failed to load lead', 'danger');
+				});
 			}
 			// delegate clicks on .btn-edit-lead
 			$(document).on('click', '.btn-edit-lead', function (e) { e.preventDefault(); var id = $(this).data('lead-id') || $(this).attr('data-lead-id'); editLead(id); });
@@ -274,7 +285,10 @@
 						if (!id) return;
 						if (!confirm('Delete this lead?')) return;
 						fetch('delete_lead.php', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'id=' + encodeURIComponent(id) })
-							.then(r => r.json()).then(j => { alert(j.message || (j.success ? 'Deleted' : 'Error')); if (j.success) loadLeads(); });
+							.then(r => r.json()).then(j => {
+								showStatus(j.message || (j.success ? 'Deleted successfully' : 'Error deleting lead'), j.success ? 'success' : 'danger');
+								if (j.success) loadLeads();
+							});
 					});
 				});
 			}
@@ -285,7 +299,35 @@
 				// Clear any pending prefill so modal fetches lookups for a fresh add
 				try { delete window.pendingLeadPrefill; delete window._pendingLeadPrefillSnapshot; } catch (e) { }
 				// Preload lookups so the modal is ready immediately (modal itself also has a fallback).
-				loadLeadFormLookups().finally(function () { leadModal.show(); });
+				loadLeadFormLookups().finally(function () {
+					// CRITICAL FIX: Move modal to body to bypass stacking contexts
+					var modalEl = document.getElementById('leadModal');
+					document.body.appendChild(modalEl);
+
+					// Re-initialize modal to ensure Bootstrap knows about the new location
+					var modalInstance = bootstrap.Modal.getInstance(modalEl);
+					if (!modalInstance) {
+						modalInstance = new bootstrap.Modal(modalEl, {
+							backdrop: 'static',
+							keyboard: false
+						});
+					}
+
+					modalInstance.show();
+
+					// CRITICAL FIX: Manually force z-index on backdrop and modal
+					setTimeout(function () {
+						var backdrops = document.querySelectorAll('.modal-backdrop');
+						backdrops.forEach(function (bd) {
+							bd.style.zIndex = '9998';
+							bd.style.setProperty('z-index', '9998', 'important');
+						});
+
+						modalEl.style.zIndex = '9999';
+						modalEl.style.setProperty('z-index', '9999', 'important');
+						modalEl.style.display = 'block'; // ensure display block
+					}, 50);
+				});
 			});
 
 			document.getElementById('leadForm').addEventListener('submit', function (e) {
@@ -294,7 +336,7 @@
 				const url = id ? 'update_lead.php' : 'create_lead.php';
 				const fd = new FormData(this);
 				fetch(url, { method: 'POST', body: fd }).then(r => r.json()).then(j => {
-					alert(j.message || (j.success ? 'Saved' : 'Error'));
+					showStatus(j.message || (j.success ? 'Lead saved successfully' : 'Error saving lead'), j.success ? 'success' : 'danger');
 					if (j.success) { leadModal.hide(); loadLeads(); }
 				});
 			});

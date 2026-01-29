@@ -1,6 +1,11 @@
 <?php
-header('Content-Type: application/json');
+// CRITICAL: Authentication required for security
+include_once __DIR__ . '/../includes/auth_check.php';
 include_once __DIR__ . '/../config/db.php';
+
+if (ob_get_level())
+    ob_clean();
+header('Content-Type: application/json');
 
 $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
 $name = isset($_POST['name']) ? trim($_POST['name']) : '';
@@ -20,27 +25,39 @@ $lead_status = isset($_POST['lead_status']) ? trim($_POST['lead_status']) : '';
 $notes = isset($_POST['notes']) ? trim($_POST['notes']) : '';
 
 // new selections
-$looking_for_type_id = isset($_POST['looking_for_type_id']) ? (int)$_POST['looking_for_type_id'] : null;
+$looking_for_type_id = isset($_POST['looking_for_type_id']) ? (int) $_POST['looking_for_type_id'] : null;
 $looking_for_subtype_ids = '';
-if (isset($_POST['looking_for_subtype_ids'])){
-    if (is_array($_POST['looking_for_subtype_ids'])) $looking_for_subtype_ids = implode(',', array_map('intval', $_POST['looking_for_subtype_ids']));
-    else $looking_for_subtype_ids = trim((string)$_POST['looking_for_subtype_ids']);
+if (isset($_POST['looking_for_subtype_ids'])) {
+    if (is_array($_POST['looking_for_subtype_ids']))
+        $looking_for_subtype_ids = implode(',', array_map('intval', $_POST['looking_for_subtype_ids']));
+    else
+        $looking_for_subtype_ids = trim((string) $_POST['looking_for_subtype_ids']);
 }
 
-if (!$id){ echo json_encode(['success'=>false,'message'=>'Missing id']); exit; }
-if ($name === ''){ echo json_encode(['success'=>false,'message'=>'Name is required']); exit; }
+if (!$id) {
+    echo json_encode(['success' => false, 'message' => 'Missing id']);
+    exit;
+}
+if ($name === '') {
+    echo json_encode(['success' => false, 'message' => 'Name is required']);
+    exit;
+}
 
 $con->query("ALTER TABLE leads ADD COLUMN IF NOT EXISTS looking_for_type_id INT NULL");
 $con->query("ALTER TABLE leads ADD COLUMN IF NOT EXISTS looking_for_subtypes TEXT NULL");
+$con->query("ALTER TABLE leads ADD COLUMN IF NOT EXISTS reference VARCHAR(255) NULL");
 $stmt = $con->prepare("UPDATE leads SET name=?, contact_number=?, email=?, looking_for_id=?, looking_for_type_id=?, looking_for_subtypes=?, lead_source_id=?, sales_person=?, profile=?, pincode=?, city=?, state=?, country=?, reference=?, purpose=?, lead_status=?, notes=?, updated_at=NOW() WHERE id=?");
-if (!$stmt){ echo json_encode(['success'=>false,'message'=>'DB prepare failed']); exit; }
+if (!$stmt) {
+    echo json_encode(['success' => false, 'message' => 'DB prepare failed']);
+    exit;
+}
 $types = 'sssii' . 's' . 'sssssssssss' . 'i';
 $stmt->bind_param($types, $name, $contact_number, $email, $looking_for_id, $looking_for_type_id, $looking_for_subtype_ids, $lead_source_id, $sales_person, $profile, $pincode, $city, $state, $country, $reference, $purpose, $lead_status, $notes, $id);
 $ok = $stmt->execute();
 $stmt->close();
 
-if ($ok){
-    echo json_encode(['success'=>true,'message'=>'Lead updated']);
+if ($ok) {
+    echo json_encode(['success' => true, 'message' => 'Lead updated']);
 } else {
-    echo json_encode(['success'=>false,'message'=>'Update failed']);
+    echo json_encode(['success' => false, 'message' => 'Update failed']);
 }

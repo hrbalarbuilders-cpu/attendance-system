@@ -1,6 +1,7 @@
 <?php
 // Shared top nav (HR / Sales / Settings) styles.
 // Keep class names `.top-nav-wrapper` and `.top-nav-pill` for existing JS.
+// NOTE: Uses CSS variables from design-system.css (loaded via header.php)
 ?>
 <style>
   /* Row that contains the pill + inside arrows (excludes the scrollbar area) */
@@ -11,14 +12,14 @@
 
   /* The pill container itself (wraps content, but won't exceed available width) */
   .top-nav-viewport {
-    --topnav-accent: #111827;
-    background: #ffffff;
-    border-radius: 28px;
-    padding: 8px;
-    box-shadow: 0 6px 18px rgba(15, 23, 42, 0.08);
+    --topnav-accent: var(--color-primary, #111827);
+    background: var(--bg-card, #ffffff);
+    border-radius: var(--radius-3xl, 28px);
+    padding: var(--space-2, 8px);
+    box-shadow: var(--shadow-md, 0 6px 18px rgba(15, 23, 42, 0.08));
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: var(--space-2, 6px);
     width: max-content;
     max-width: 100%;
     box-sizing: border-box;
@@ -40,11 +41,15 @@
     overflow-x: auto;
     overflow-y: hidden;
     scroll-behavior: smooth;
-    scrollbar-width: none; /* Firefox */
+    scrollbar-width: none;
+    /* Firefox */
     min-width: 0;
     max-width: 100%;
   }
-  .top-nav-wrapper::-webkit-scrollbar { display: none; }
+
+  .top-nav-wrapper::-webkit-scrollbar {
+    display: none;
+  }
 
   .top-nav-shell {
     position: relative;
@@ -58,12 +63,16 @@
     background: #e5e7eb;
     border-radius: 999px;
     overflow: hidden;
-    display: block !important; /* always visible */
+    display: block !important;
+    /* always visible */
   }
+
   .top-nav-scrollbar-thumb {
     height: 100%;
-    width: 100%; /* full width when no scrolling needed */
-    background: #111827; /* black */
+    width: 100%;
+    /* full width when no scrolling needed */
+    background: #111827;
+    /* black */
     border-radius: 999px;
     transform: translateX(0);
     will-change: transform, width;
@@ -77,7 +86,8 @@
     flex-shrink: 0;
     border-radius: 999px;
     border: none;
-    background: #111827; /* black */
+    background: #111827;
+    /* black */
     color: #ffffff;
     display: inline-flex;
     align-items: center;
@@ -86,9 +96,11 @@
     box-shadow: 0 6px 18px rgba(15, 23, 42, 0.08);
     user-select: none;
   }
+
   .top-nav-arrow:hover {
     background: #1f2937;
   }
+
   .top-nav-arrow:disabled {
     opacity: 0.45;
     cursor: not-allowed;

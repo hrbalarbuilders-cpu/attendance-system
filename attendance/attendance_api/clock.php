@@ -181,7 +181,8 @@ if ($checkStmt) {
     } else {
         echo json_encode([
             "status" => "error",
-            "msg" => "Employee not found or inactive. Please contact administrator."
+            "msg" => "Employee not found or inactive. Please contact administrator.",
+            "inactive" => true
         ]);
         $checkStmt->close();
         exit;

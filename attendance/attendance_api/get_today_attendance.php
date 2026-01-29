@@ -16,6 +16,24 @@ if ($user_id <= 0) {
     exit;
 }
 
+// CRITICAL: Ensure employee is active before showing any data
+$checkStmt = $con->prepare("SELECT user_id FROM employees WHERE user_id = ? AND status = 1 LIMIT 1");
+if ($checkStmt) {
+    $checkStmt->bind_param("i", $user_id);
+    $checkStmt->execute();
+    $checkRes = $checkStmt->get_result();
+    if ($checkRes->num_rows === 0) {
+        $checkStmt->close();
+        echo json_encode([
+            "status" => "error",
+            "msg" => "Account is inactive",
+            "inactive" => true // Signal for app to logout
+        ]);
+        exit;
+    }
+    $checkStmt->close();
+}
+
 // Get attendance logs for today
 $startDateTime = $date . ' 00:00:00';
 $endDateTime = $date . ' 23:59:59';
