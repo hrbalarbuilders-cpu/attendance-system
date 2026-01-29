@@ -15,6 +15,7 @@ class GeoFence {
   final double lat;
   final double lng;
   final double radiusMeters;
+  final String? polygon;
 
   GeoFence({
     required this.id,
@@ -23,6 +24,7 @@ class GeoFence {
     required this.lat,
     required this.lng,
     required this.radiusMeters,
+    this.polygon,
   });
 
   factory GeoFence.fromJson(Map<String, dynamic> json) {
@@ -37,6 +39,7 @@ class GeoFence {
       radiusMeters: _parseDouble(
         json['radius'] ?? json['radius_meters'] ?? 100,
       ),
+      polygon: json['polygon'] as String?,
     );
   }
 
@@ -56,6 +59,7 @@ class GeoFenceResult {
   final String? nearestFenceName;
   final double? distanceToNearest;
   final String? errorMessage;
+  final bool isMocked;
 
   GeoFenceResult({
     required this.isWithinFence,
@@ -64,6 +68,7 @@ class GeoFenceResult {
     this.nearestFenceName,
     this.distanceToNearest,
     this.errorMessage,
+    this.isMocked = false,
   });
 }
 
@@ -281,6 +286,16 @@ class LocationService {
       return GeoFenceResult(
         isWithinFence: false,
         errorMessage: 'Unable to get your location. Please try again.',
+      );
+    }
+
+    // Step 2.5: Detect Mock Location (Android)
+    if (position.isMocked) {
+      return GeoFenceResult(
+        isWithinFence: false,
+        isMocked: true,
+        errorMessage:
+            'Fake location detected. Please disable any mock location apps to clock in/out.',
       );
     }
 

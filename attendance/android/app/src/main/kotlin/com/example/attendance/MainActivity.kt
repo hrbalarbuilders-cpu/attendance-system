@@ -20,9 +20,10 @@ class MainActivity : FlutterActivity() {
                     val lat = call.argument<Double>("lat") ?: 0.0
                     val lng = call.argument<Double>("lng") ?: 0.0
                     val radius = call.argument<Double>("radius")?.toFloat() ?: 100f
+                    val polygon = call.argument<String>("polygon") ?: ""
                     
                     // 1. Register Geofence with OS
-                    geofenceManager.startGeofence(id, lat, lng, radius)
+                    geofenceManager.startGeofence(id, lat, lng, radius, polygon)
                     
                     // 2. Start Foreground Service to show persistent notification
                     val serviceIntent = Intent(this, GeofenceForegroundService::class.java)
@@ -42,6 +43,11 @@ class MainActivity : FlutterActivity() {
                     stopService(serviceIntent)
                     
                     result.success(true)
+                }
+                "isAutoTimeEnabled" -> {
+                    val isAutoTime = android.provider.Settings.Global.getInt(contentResolver, android.provider.Settings.Global.AUTO_TIME, 0) == 1
+                    val isAutoTimeZone = android.provider.Settings.Global.getInt(contentResolver, android.provider.Settings.Global.AUTO_TIME_ZONE, 0) == 1
+                    result.success(isAutoTime && isAutoTimeZone)
                 }
                 else -> {
                     result.notImplemented()

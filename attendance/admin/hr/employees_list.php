@@ -32,7 +32,8 @@ if ($countRes && $countRes->num_rows) {
 }
 
 $sql = "
-SELECT e.*, d.department_name, s.shift_name, s.start_time, s.end_time
+SELECT e.user_id, e.emp_code, e.name, e.department_id, e.shift_id, e.status, e.updated_at, e.created_at,
+       d.department_name, s.shift_name, s.start_time, s.end_time
 FROM employees e
 LEFT JOIN departments d ON d.id = e.department_id
 LEFT JOIN shifts s ON s.id = e.shift_id
@@ -65,27 +66,3 @@ if ($isAjax) {
 </body>
 
 </html>
-if (noDataRow) {
-noDataRow.style.display = anyVisible ? 'none' : '';
-}
-// Show matched names under the table
-var resultsDiv = document.getElementById('searchResults');
-if (resultsDiv) {
-if (filter !== '' && matchedNames.length > 0) {
-resultsDiv.innerHTML = '<strong>Matching Employees:</strong>
-<ul class="list-group list-group-flush">' +
-  matchedNames.map(function(name) { return '<li class="list-group-item py-1">' + name + '</li>'; }).join('') + '</ul>';
-} else if (filter !== '') {
-resultsDiv.innerHTML = '<span class="text-danger">No matching employees found.</span>';
-} else {
-resultsDiv.innerHTML = '';
-}
-}
-}
-var searchInput = document.getElementById('employeeSearch');
-if (searchInput) {
-searchInput.addEventListener('input', filterEmployeeTable);
-// Run once on load to ensure correct state
-filterEmployeeTable();
-}
-</script>

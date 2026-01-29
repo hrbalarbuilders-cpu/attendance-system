@@ -32,21 +32,27 @@ $sql = "SELECT la.id, la.user_id, e.name AS employee_name, lt.name AS leave_type
 $result = $con->query($sql);
 
 // Preload dropdown data for Apply Leave modal
+// Preload dropdown data for Apply Leave modal
 $employeesList = [];
-$empRes = $con->query("SELECT user_id, emp_code, name FROM employees ORDER BY name ASC");
-if ($empRes && $empRes->num_rows) {
-    while ($e = $empRes->fetch_assoc()) {
-        $employeesList[] = $e;
+$leaveTypesList = [];
+
+if (!$isAjax) {
+    // ONLY FETCH FULL LISTS FOR MODAL IF NOT AJAX (Full Page Load)
+    $empRes = $con->query("SELECT user_id, emp_code, name FROM employees ORDER BY name ASC");
+    if ($empRes && $empRes->num_rows) {
+        while ($e = $empRes->fetch_assoc()) {
+            $employeesList[] = $e;
+        }
+    }
+
+    $ltRes = $con->query("SELECT id, code, name FROM leave_types ORDER BY name ASC");
+    if ($ltRes && $ltRes->num_rows) {
+        while ($lt = $ltRes->fetch_assoc()) {
+            $leaveTypesList[] = $lt;
+        }
     }
 }
 
-$leaveTypesList = [];
-$ltRes = $con->query("SELECT id, code, name FROM leave_types ORDER BY name ASC");
-if ($ltRes && $ltRes->num_rows) {
-    while ($lt = $ltRes->fetch_assoc()) {
-        $leaveTypesList[] = $lt;
-    }
-}
 
 function renderLeavesTable($result, $totalCount, $page, $per_page, $offset, $employeesList, $leaveTypesList)
 {

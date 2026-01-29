@@ -57,11 +57,35 @@ class NativeGeofenceService {
         'lat': fence.lat,
         'lng': fence.lng,
         'radius': fence.radiusMeters,
+        'polygon': fence.polygon ?? '',
       });
       _isActive = success;
       print('NativeGeofenceService: System call success: $success');
     } catch (e) {
       print('NativeGeofenceService: Failed to start native geofence: $e');
+    }
+  }
+
+  /// Update the earliest allowed time for auto-attendance
+  Future<void> updateNextAllowedStart(String? timestamp) async {
+    final prefs = await SharedPreferences.getInstance();
+    if (timestamp != null) {
+      await prefs.setString('next_allowed_start', timestamp);
+      print('NativeGeofenceService: Lock updated to $timestamp');
+    } else {
+      await prefs.remove('next_allowed_start');
+      print('NativeGeofenceService: Lock cleared');
+    }
+  }
+
+  /// Check if automatic time and time zone are enabled
+  Future<bool> isAutoTimeEnabled() async {
+    try {
+      final bool? isAuto = await _channel.invokeMethod('isAutoTimeEnabled');
+      return isAuto ?? false;
+    } catch (e) {
+      print('Failed to check auto time: $e');
+      return true; // Fallback to true so we don't block users if plugin fails
     }
   }
 

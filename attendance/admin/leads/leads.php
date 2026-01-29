@@ -79,7 +79,8 @@
 				<div class="card-header card-main-header pt-3 pb-3 border-bottom-0">
 					<div class="d-flex flex-wrap align-items-center gap-3 w-100">
 						<div style="flex: 1; min-width: 280px;">
-							<input type="search" id="leadSearch" class="form-control" placeholder="Search by name, contact, email...">
+							<input type="search" id="leadSearch" class="form-control"
+								placeholder="Search by name, contact, email...">
 						</div>
 						<div style="width: 140px;">
 							<select id="leadStatusFilter" class="form-select">
@@ -93,7 +94,8 @@
 							<select id="leadSalesFilter" class="form-select"></select>
 						</div>
 						<div class="ms-md-auto">
-							<span class="badge bg-light text-dark border fw-medium px-3 py-2">Total: <span id="leadsCount">0</span></span>
+							<span class="badge bg-light text-dark border fw-medium px-3 py-2">Total: <span
+									id="leadsCount">0</span></span>
 						</div>
 					</div>
 				</div>

@@ -13,11 +13,8 @@ void main() async {
   final bool isLoggedIn = prefs.getBool('is_logged_in') ?? false;
 
   if (isLoggedIn) {
-    // Check if essential permissions are missing
-    // We don't want to show complex UI here, just trigger the request
-    // AppGeofenceService().initialize() will handle the detailed UI in AttendanceScreen if needed,
-    // but let's ensure the requests happen.
-    await AppGeofenceService().initialize();
+    // Start geofencing in background without blocking the UI
+    AppGeofenceService().initialize();
   }
 
   runApp(MyApp(isLoggedIn: isLoggedIn));

@@ -75,6 +75,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['location_form'])) {
   <meta charset="UTF-8">
   <title>Settings</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <!-- Leaflet & Geofencing Libraries (Global) -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.css" />
   <style>
     body {
       background: #f3f5fb;
@@ -376,11 +380,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['location_form'])) {
           modal.querySelector('[name="id"]').value = '0';
           modal.querySelector('[name="location_group"]').value = '';
           modal.querySelector('[name="location_name"]').value = '';
-          modal.querySelector('[name="latitude"]').value = '';
-          modal.querySelector('[name="longitude"]').value = '';
-          modal.querySelector('[name="radius_meters"]').value = '100';
-          modal.querySelector('.modal-title').textContent = 'Add Point';
-          modal.querySelector('button[type="submit"]').textContent = 'Add Point';
+          modal.querySelector('[name="geofence_polygon"]').value = '';
+          modal.querySelector('.modal-title').textContent = 'Add Office';
+          modal.querySelector('button[type="submit"]').textContent = 'Save Office';
           var bsModal = bootstrap.Modal.getOrCreateInstance(modal);
           bsModal.show();
         });
@@ -392,11 +394,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['location_form'])) {
           modal.querySelector('[name="id"]').value = btn.dataset.id;
           modal.querySelector('[name="location_group"]').value = btn.dataset.group || '';
           modal.querySelector('[name="location_name"]').value = btn.dataset.name;
-          modal.querySelector('[name="latitude"]').value = btn.dataset.lat;
-          modal.querySelector('[name="longitude"]').value = btn.dataset.lng;
-          modal.querySelector('[name="radius_meters"]').value = btn.dataset.radius;
-          modal.querySelector('.modal-title').textContent = 'Edit Point';
-          modal.querySelector('button[type="submit"]').textContent = 'Update';
+          modal.querySelector('[name="geofence_polygon"]').value = btn.dataset.polygon || '';
+          modal.querySelector('[name="latitude"]').value = btn.dataset.lat || '';
+          modal.querySelector('[name="longitude"]').value = btn.dataset.lng || '';
+          modal.querySelector('[name="radius_meters"]').value = btn.dataset.radius || '150';
+
+          if (window.onLocationEdit) window.onLocationEdit(btn.dataset.polygon);
+
+          modal.querySelector('.modal-title').textContent = 'Edit Office';
+          modal.querySelector('button[type="submit"]').textContent = 'Update Office';
           var bsModal = bootstrap.Modal.getOrCreateInstance(modal);
           bsModal.show();
         });
@@ -407,11 +413,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['location_form'])) {
         modal.querySelector('[name="id"]').value = '0';
         modal.querySelector('[name="location_group"]').value = '';
         modal.querySelector('[name="location_name"]').value = '';
-        modal.querySelector('[name="latitude"]').value = '';
-        modal.querySelector('[name="longitude"]').value = '';
-        modal.querySelector('[name="radius_meters"]').value = '100';
-        modal.querySelector('.modal-title').textContent = 'Add Point';
-        modal.querySelector('button[type="submit"]').textContent = 'Add Point';
+        modal.querySelector('[name="geofence_polygon"]').value = '';
+
+        if (window.onLocationReset) window.onLocationReset();
+
+        modal.querySelector('.modal-title').textContent = 'Add Office';
+        modal.querySelector('button[type="submit"]').textContent = 'Save Office';
       });
 
       // Toggle button
@@ -611,10 +618,203 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['location_form'])) {
         loadSettingsTab(targetBtn.dataset.page, targetBtn);
       }
     });
+
+    // --- GLOBAL GEOFENCING LOGIC ---
+    let adminMap, drawnItems, drawControl;
+
+    function initAdminMap() {
+      const mapContainer = document.getElementById('admin_map');
+      if (!mapContainer) return;
+
+      if (adminMap) {
+        adminMap.invalidateSize();
+        return;
+      }
+
+      const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 });
+      const satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+        attribution: 'Esri Satellite'
+      });
+
+      adminMap = L.map('admin_map', {
+        center: [20.3976, 72.8908],
+        zoom: 15,
+        layers: [satellite]
+      });
+
+      L.control.layers({ "Satellite": satellite, "Road": osm }).addTo(adminMap);
+
+      drawnItems = new L.FeatureGroup();
+      adminMap.addLayer(drawnItems);
+
+      drawControl = new L.Control.Draw({
+        draw: {
+          polygon: { allowIntersection: false, shapeOptions: { color: '#6366f1' } },
+          rectangle: { shapeOptions: { color: '#6366f1' } },
+          circle: false, circlemarker: false, polyline: false, marker: false
+        },
+        edit: { featureGroup: drawnItems }
+      });
+      adminMap.addControl(drawControl);
+
+      L.Control.geocoder({ defaultMarkGeocode: false })
+        .on('markgeocode', function (e) {
+          adminMap.fitBounds(e.geocode.bbox);
+          adminMap.setZoom(18);
+        }).addTo(adminMap);
+
+      adminMap.on(L.Draw.Event.CREATED, function (e) {
+        drawnItems.clearLayers();
+        drawnItems.addLayer(e.layer);
+        updatePolygonData(e.layer);
+      });
+
+      adminMap.on(L.Draw.Event.EDITED, function (e) {
+        e.layers.eachLayer(updatePolygonData);
+      });
+
+      adminMap.on('click', function (e) {
+        if (!drawnItems.getLayers().length) {
+          const latInp = document.getElementById('lat_input');
+          const lngInp = document.getElementById('lng_input');
+          if (latInp) latInp.value = e.latlng.lat.toFixed(7);
+          if (lngInp) lngInp.value = e.latlng.lng.toFixed(7);
+        }
+      });
+    }
+
+    function updatePolygonData(layer) {
+      const shape = layer.toGeoJSON();
+      const coords = shape.geometry.coordinates[0];
+      const polyInp = document.getElementById('geofence_polygon_input');
+      if (polyInp) polyInp.value = JSON.stringify(coords);
+
+      // Auto-calculate center
+      const bounds = layer.getBounds();
+      const center = bounds.getCenter();
+      const latInp = document.getElementById('lat_input');
+      const lngInp = document.getElementById('lng_input');
+      if (latInp) latInp.value = center.lat.toFixed(7);
+      if (lngInp) lngInp.value = center.lng.toFixed(7);
+
+      // Auto-calculate suggested radius (distance from center to furthest corner + 20% buffer)
+      let maxDist = 0;
+      coords.forEach(c => {
+        const d = center.distanceTo([c[1], c[0]]);
+        if (d > maxDist) maxDist = d;
+      });
+      const radInp = document.getElementById('radius_input');
+      if (radInp) radInp.value = Math.ceil(maxDist * 1.5);
+    }
+
+    window.applyBulkCoords = function () {
+      const raw = document.getElementById('bulk_coords_input').value;
+      if (!raw.trim()) {
+        alert("Please paste some coordinates first.");
+        return;
+      }
+
+      // Match pairs of numbers like "20.123, 72.456"
+      const regex = /(-?\d+\.\d+)\s*,\s*(-?\d+\.\d+)/g;
+      let points = [];
+      let match;
+
+      while ((match = regex.exec(raw)) !== null) {
+        points.push([parseFloat(match[1]), parseFloat(match[2])]); // [lat, lng]
+      }
+
+      if (points.length < 3) {
+        alert("I found " + points.length + " points. A polygon needs at least 3 points.");
+        return;
+      }
+
+      // Convert to GeoJSON [lng, lat] for storage
+      const geoJsonCoords = points.map(p => [p[1], p[0]]);
+      const jsonString = JSON.stringify(geoJsonCoords);
+
+      const polyInp = document.getElementById('geofence_polygon_input');
+      if (polyInp) polyInp.value = jsonString;
+
+      // Draw it on the map
+      if (window.onLocationEdit) window.onLocationEdit(jsonString);
+
+      alert("Success! " + points.length + " points processed and boundary defined.");
+    };
+
+    window.onLocationEdit = function (polygonJson) {
+      setTimeout(() => {
+        initAdminMap();
+        if (!drawnItems) return;
+        drawnItems.clearLayers();
+        const bulkInp = document.getElementById('bulk_coords_input');
+
+        if (polygonJson && polygonJson.trim() !== '') {
+          try {
+            const coords = JSON.parse(polygonJson);
+            const latLngs = coords.map(c => [c[1], c[0]]);
+            const layer = L.polygon(latLngs, { color: '#6366f1' }).addTo(drawnItems);
+            adminMap.fitBounds(layer.getBounds());
+
+            // AUTO-FILL CENTER & RADIUS FOR PASTE TOOL
+            const bounds = layer.getBounds();
+            const center = bounds.getCenter();
+            const latInp = document.getElementById('lat_input');
+            const lngInp = document.getElementById('lng_input');
+            const radInp = document.getElementById('radius_input');
+
+            if (latInp) latInp.value = center.lat.toFixed(7);
+            if (lngInp) lngInp.value = center.lng.toFixed(7);
+
+            if (radInp) {
+              let maxDist = 0;
+              latLngs.forEach(ll => {
+                const d = center.distanceTo(ll);
+                if (d > maxDist) maxDist = d;
+              });
+              radInp.value = Math.ceil(maxDist * 1.5);
+            }
+
+            if (bulkInp) {
+              bulkInp.value = latLngs.map(ll => ll[0].toFixed(7) + ", " + ll[1].toFixed(7)).join("\n");
+            }
+          } catch (e) { console.error("Polygon parse error", e); }
+        } else {
+          if (bulkInp) bulkInp.value = '';
+          const lat = parseFloat(document.getElementById('lat_input')?.value);
+          const lng = parseFloat(document.getElementById('lng_input')?.value);
+          if (!isNaN(lat) && !isNaN(lng)) adminMap.setView([lat, lng], 18);
+        }
+        adminMap.invalidateSize();
+      }, 300);
+    };
+
+    window.onLocationReset = function () {
+      if (drawnItems) drawnItems.clearLayers();
+      const polyInp = document.getElementById('geofence_polygon_input');
+      const bulkInp = document.getElementById('bulk_coords_input');
+      if (polyInp) polyInp.value = '';
+      if (bulkInp) bulkInp.value = '';
+    };
+
+    // Attach map resize to modal open GLOBAL
+    document.addEventListener('shown.bs.modal', function (e) {
+      if (e.target.id === 'locationModal') {
+        setTimeout(() => {
+          initAdminMap();
+          if (adminMap) adminMap.invalidateSize();
+        }, 300);
+      }
+    });
+
   </script>
 
   <!-- Bootstrap JS (needed for Shift time picker modal) -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+  <!-- Leaflet & Geofencing Libraries (Global) -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
+  <script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
 
   <!-- Shared Time Picker Modal for Shift Master -->
   <div class="modal fade" id="shiftTimePickerModal" tabindex="-1" aria-hidden="true">

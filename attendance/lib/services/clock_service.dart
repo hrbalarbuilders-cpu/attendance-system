@@ -6,11 +6,15 @@ class ClockResult {
   final bool success;
   final String message;
   final bool isClockedIn;
+  final String? serverTime;
+  final String? nextAllowedStart;
 
   ClockResult({
     required this.success,
     required this.message,
     required this.isClockedIn,
+    this.serverTime,
+    this.nextAllowedStart,
   });
 }
 
@@ -33,6 +37,32 @@ class ShiftInfo {
 }
 
 class ClockService {
+  /// Fetch all dashboard data (shift, attendance, wishes) in one single request.
+  static Future<Map<String, dynamic>> getDashboardData({
+    required Uri baseUri,
+    required int userId,
+    required String date,
+    Duration timeout = const Duration(seconds: 15),
+  }) async {
+    if (userId <= 0) return {'success': false};
+
+    final url = Uri.parse(
+      '${baseUri.toString()}get_dashboard_data.php?user_id=${userId.toString()}&date=${Uri.encodeComponent(date)}',
+    );
+    try {
+      final response = await http.get(url).timeout(timeout);
+      final data = json.decode(response.body);
+      if (data is Map && data['status'] == 'success') {
+        return {'success': true, 'data': data};
+      }
+      return {'success': false, 'msg': data['msg']};
+    } on TimeoutException {
+      return {'success': false, 'error': 'timeout'};
+    } catch (e) {
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+
   /// Perform clock in/out request.
   /// [baseUri] should be the API base URI (e.g., kBaseUri from config).
   /// [deviceId] should be the actual device identifier from LocationService.getDeviceId().
@@ -45,6 +75,7 @@ class ClockService {
     double? lat,
     double? lng,
     bool isAuto = false,
+    bool isMocked = false,
     Duration timeout = const Duration(seconds: 10),
   }) async {
     if (userId <= 0) {
@@ -64,17 +95,16 @@ class ClockService {
     }
 
     final url = baseUri.resolve('clock.php');
-    final now = DateTime.now();
     final body = {
       'user_id': userId.toString(),
       'type': type,
-      'time': now.toIso8601String(),
       'device_id': deviceId,
       'lat': lat?.toString() ?? '',
       'lng': lng?.toString() ?? '',
       'working_from': '',
       'reason': type == 'in' ? 'shift_start' : 'shift_end',
       'is_auto': isAuto ? '1' : '0',
+      'is_mocked': isMocked ? '1' : '0',
     };
 
     try {
@@ -88,6 +118,8 @@ class ClockService {
               ? 'Clocked in successfully!'
               : 'Clocked out successfully!',
           isClockedIn: type == 'in',
+          serverTime: data['time'] as String?,
+          nextAllowedStart: data['next_allowed_start'] as String?,
         );
       }
 

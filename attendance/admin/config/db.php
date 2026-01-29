@@ -1,26 +1,40 @@
 <?php
-// Start session if not already started
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
+// Start output buffering to prevent any accidental output
+ob_start();
 
-// Database host - Alwaysdata
-$host = "mysql-demoserver.alwaysdata.net";
+// ========================================
+// DATABASE CONFIGURATION - LOCAL WAMP
+// ========================================
 
-// Alwaysdata database username
-$user = "demoserver";
+// Database host - Local
+$host = "localhost";
 
-// Alwaysdata database password
-$pass = "Manyooooh199";
+// Database username
+$user = "root";
 
-// Alwaysdata database name
-$db = "demoserver_attendance";
+// Database password
+$pass = "";
 
+// Database name
+$db = "attendance_db";
+
+// ========================================
+// CREATE DATABASE CONNECTION
+// ========================================
 $con = new mysqli($host, $user, $pass, $db);
 
-// Set charset to UTF-8
+// Set charset to UTF-8 to prevent encoding issues
 $con->set_charset("utf8mb4");
 
+// Check connection
 if ($con->connect_error) {
-    die("DB Error: " . $con->connect_error);
+    // Return JSON error instead of plain text
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode([
+        "status" => "error",
+        "msg" => "Database connection failed: " . $con->connect_error
+    ]);
+    exit;
 }
+
+// NO CLOSING PHP TAG - This prevents BOM and whitespace issues!

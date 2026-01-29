@@ -3,13 +3,14 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1:3306
--- Generation Time: Jan 25, 2026 at 11:03 AM
+-- Generation Time: Jan 29, 2026 at 09:28 AM
 -- Server version: 8.4.7
 -- PHP Version: 8.3.28
 
 SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
 START TRANSACTION;
 SET time_zone = "+00:00";
+SET FOREIGN_KEY_CHECKS = 0;
 
 
 /*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
@@ -40,16 +41,17 @@ CREATE TABLE IF NOT EXISTS `attendance_logs` (
   `longitude` decimal(10,6) DEFAULT NULL,
   `synced` tinyint(1) DEFAULT '1',
   `is_auto` tinyint(1) DEFAULT '0',
-  PRIMARY KEY (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=326 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+  PRIMARY KEY (`id`),
+  KEY `idx_logs_user_date` (`user_id`,`time`)
+) ENGINE=InnoDB AUTO_INCREMENT=344 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
 -- Dumping data for table `attendance_logs`
 --
 
 INSERT INTO `attendance_logs` (`id`, `user_id`, `type`, `working_from`, `reason`, `time`, `device_id`, `latitude`, `longitude`, `synced`, `is_auto`) VALUES
-(324, '3', 'in', 'Ville Flora', 'shift_start', '2026-01-25 15:45:49', 'AP3A.240905.015.A2', 20.420329, 72.870753, 1, 1),
-(325, '3', 'leave', NULL, '', '2026-01-27 00:00:00', '', NULL, NULL, 1, 0);
+(342, '3', 'in', 'Ville Flora', 'shift_start', '2026-01-29 14:42:01', 'AP3A.240905.015.A2', 20.420290, 72.870793, 1, 1),
+(343, '3', 'out', 'Ville Flora', 'shift_end', '2026-01-29 14:49:19', 'AP3A.240905.015.A2', 20.420325, 72.870740, 1, 0);
 
 -- --------------------------------------------------------
 
@@ -65,14 +67,14 @@ CREATE TABLE IF NOT EXISTS `attendance_settings` (
   `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   UNIQUE KEY `setting_key` (`setting_key`)
-) ENGINE=InnoDB AUTO_INCREMENT=318 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=578 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
 -- Dumping data for table `attendance_settings`
 --
 
 INSERT INTO `attendance_settings` (`id`, `setting_key`, `setting_value`, `updated_at`) VALUES
-(1, 'global_auto_attendance', '1', '2026-01-24 07:00:52'),
+(1, 'global_auto_attendance', '1', '2026-01-29 09:05:46'),
 (125, 'device_limit', '2', '2026-01-25 09:20:57'),
 (140, 'ip_restriction_enabled', '0', '2026-01-25 09:18:22'),
 (141, 'allowed_ips', '', '2026-01-25 09:18:22');
@@ -163,7 +165,10 @@ CREATE TABLE IF NOT EXISTS `employees` (
   `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`user_id`),
   KEY `department_id` (`department_id`),
-  KEY `designation_id` (`designation_id`)
+  KEY `designation_id` (`designation_id`),
+  KEY `idx_emp_dept` (`department_id`),
+  KEY `idx_emp_shift` (`shift_id`),
+  KEY `idx_emp_name` (`name`)
 ) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
@@ -206,24 +211,25 @@ INSERT INTO `employee_devices` (`id`, `user_id`, `device_id`, `created_at`) VALU
 
 DROP TABLE IF EXISTS `geo_settings`;
 CREATE TABLE IF NOT EXISTS `geo_settings` (
-  `id` int NOT NULL,
+  `id` int NOT NULL AUTO_INCREMENT,
   `location_name` varchar(100) COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'Office',
-  `latitude` decimal(10,6) NOT NULL,
-  `longitude` decimal(10,6) NOT NULL,
-  `radius_meters` int NOT NULL DEFAULT '150',
   `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
   `is_active` tinyint(1) NOT NULL DEFAULT '1',
   `location_group` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `geofence_polygon` longtext COLLATE utf8mb4_general_ci,
+  `latitude` decimal(10,8) DEFAULT NULL,
+  `longitude` decimal(11,8) DEFAULT NULL,
+  `radius_meters` int DEFAULT '150',
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
 -- Dumping data for table `geo_settings`
 --
 
-INSERT INTO `geo_settings` (`id`, `location_name`, `latitude`, `longitude`, `radius_meters`, `created_at`, `updated_at`, `is_active`, `location_group`) VALUES
-(1, 'Ville Flora', 20.420399, 72.870863, 200, '2025-12-10 19:47:04', '2026-01-25 09:28:36', 1, 'Kunta');
+INSERT INTO `geo_settings` (`id`, `location_name`, `created_at`, `updated_at`, `is_active`, `location_group`, `geofence_polygon`, `latitude`, `longitude`, `radius_meters`) VALUES
+(2, 'Ville Flora', '2026-01-29 09:05:29', NULL, 1, 'Kunta', '[[72.87066018168956,20.42009206795784],[72.87096867803032,20.421615646186414],[72.87041866164246,20.42190358587029],[72.87083591543859,20.423211749540524],[72.8718297381318,20.42369519851215],[72.87671919408285,20.423940477180764],[72.87676091946521,20.422461689681935],[72.8756077816633,20.42210620979175],[72.87242527307937,20.42205288773622],[72.8724101002408,20.422056442541198],[72.87233423591144,20.422451025285422],[72.87179939239485,20.422419032127785],[72.87116213204163,20.420001752046037]]', 20.42197110, 72.87358980, 590);
 
 -- --------------------------------------------------------
 
@@ -416,15 +422,9 @@ CREATE TABLE IF NOT EXISTS `leave_applications` (
   `reason` text COLLATE utf8mb4_unicode_ci NOT NULL,
   `status` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'pending',
   `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`)
+  PRIMARY KEY (`id`),
+  KEY `idx_leaves_user` (`user_id`)
 ) ENGINE=MyISAM AUTO_INCREMENT=37 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
---
--- Dumping data for table `leave_applications`
---
-
-INSERT INTO `leave_applications` (`id`, `user_id`, `leave_type_id`, `from_date`, `to_date`, `reason`, `status`, `created_at`) VALUES
-(35, 3, 1, '2026-01-27', '2026-01-27', 'ok', 'approved', '2026-01-25 10:16:23');
 
 -- --------------------------------------------------------
 
@@ -580,6 +580,7 @@ ALTER TABLE `designations`
 ALTER TABLE `employees`
   ADD CONSTRAINT `employees_ibfk_1` FOREIGN KEY (`department_id`) REFERENCES `departments` (`id`),
   ADD CONSTRAINT `employees_ibfk_2` FOREIGN KEY (`designation_id`) REFERENCES `designations` (`id`);
+SET FOREIGN_KEY_CHECKS = 1;
 COMMIT;
 
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;

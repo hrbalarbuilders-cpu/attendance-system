@@ -13,6 +13,22 @@ $monthName = date('F Y', strtotime("$year-$month-01"));
 $totalDays = cal_days_in_month(CAL_GREGORIAN, $month, $year);
 
 /* ---------- Fetch Employees (with emp_code, shift info, weekoff_days for mapping) ---------- */
+/* ---------- Pagination (Employees rows) ---------- */
+$page = isset($_GET['page']) ? max(1, (int) $_GET['page']) : 1;
+$per_page = isset($_GET['per_page']) ? max(1, (int) $_GET['per_page']) : 10;
+if ($per_page > 100)
+    $per_page = 100;
+$offset = ($page - 1) * $per_page;
+
+/* ---------- Count Total Employees for Pagination ---------- */
+$countSql = "SELECT COUNT(*) AS c FROM employees";
+$countRes = $con->query($countSql);
+$totalEmployees = 0;
+if ($countRes && $row = $countRes->fetch_assoc()) {
+    $totalEmployees = (int) $row['c'];
+}
+
+/* ---------- Fetch Employees (Pagination Applied) ---------- */
 $empSql = "
     SELECT e.user_id, e.emp_code, e.name, desig.designation_name, e.shift_id, e.weekoff_days,
            s.start_time, s.end_time, s.late_mark_after, s.half_day_after
@@ -20,10 +36,15 @@ $empSql = "
     LEFT JOIN designations desig ON desig.id = e.designation_id
     LEFT JOIN shifts s ON s.id = e.shift_id
     ORDER BY e.name ASC
+    LIMIT ?, ?
 ";
-$empRes = $con->query($empSql);
 
-$employees = [];
+$stmtEmp = $con->prepare($empSql);
+$stmtEmp->bind_param("ii", $offset, $per_page);
+$stmtEmp->execute();
+$empRes = $stmtEmp->get_result();
+
+$employeesPage = []; // Renamed from $employees to match usage
 $empByLogUserId = []; // key = attendance_logs.user_id, value = employee_id
 $empShifts = []; // key = employee_id, value = shift data
 $empWeekOffs = []; // key = employee_id, value = weekoff_days string
@@ -33,7 +54,7 @@ if ($empRes && $empRes->num_rows > 0) {
         // Use actual Database Primary Key (user_id)
         $empId = (int) $row['user_id'];
         $row['log_user_id'] = $empId;
-        $employees[] = $row;
+        $employeesPage[] = $row;
         $empByLogUserId[$empId] = $empId;
 
         // Store shift info
@@ -52,16 +73,11 @@ if ($empRes && $empRes->num_rows > 0) {
         }
     }
 }
+$stmtEmp->close();
 
-/* ---------- Pagination (Employees rows) ---------- */
-$page = isset($_GET['page']) ? max(1, (int) $_GET['page']) : 1;
-$per_page = isset($_GET['per_page']) ? max(1, (int) $_GET['per_page']) : 10;
-if ($per_page > 100)
-    $per_page = 100;
-$offset = ($page - 1) * $per_page;
+// Legacy variable name for compatibility if used below
+$employees = $employeesPage;
 
-$totalEmployees = count($employees);
-$employeesPage = array_slice($employees, $offset, $per_page);
 
 /* ---------- Fetch Holidays for this month ---------- */
 $holidaysMap = []; // [date] = holiday_name (e.g., ['2025-12-25' => 'Christmas'])
@@ -651,6 +667,10 @@ function determineAttendanceStatus($dayData, $date, $shiftInfo = null, $weekoffD
 
     /* Future Date */
 
+    .clickable {
+        cursor: pointer;
+    }
+
     /* Tooltip */
     .att-cell-wrapper {
         position: relative;
@@ -787,7 +807,8 @@ function determineAttendanceStatus($dayData, $date, $shiftInfo = null, $weekoffD
                         <?php for ($d = 1; $d <= $totalDays; $d++):
                             $day = date('D', strtotime("$year-$month-$d"));
                             ?>
-                            <th>
+                            <th class="att-header-date clickable"
+                                data-date="<?php echo sprintf('%04d-%02d-%02d', $year, $month, $d); ?>">
                                 <?php echo $d; ?><br>
                                 <small><?php echo $day; ?></small>
                             </th>
@@ -814,7 +835,8 @@ function determineAttendanceStatus($dayData, $date, $shiftInfo = null, $weekoffD
                                         <div class="emp-details">
                                             <div class="emp-name"><?php echo htmlspecialchars($emp['name']); ?></div>
                                             <div class="emp-role">
-                                                <?php echo htmlspecialchars($emp['designation_name'] ?? ''); ?></div>
+                                                <?php echo htmlspecialchars($emp['designation_name'] ?? ''); ?>
+                                            </div>
                                         </div>
                                     </div>
                                 </td>
@@ -930,7 +952,8 @@ function determineAttendanceStatus($dayData, $date, $shiftInfo = null, $weekoffD
 
         <div class="d-flex justify-content-between align-items-center mt-2 px-2 pb-2">
             <div class="small text-muted">Record <?php echo $attStartRec; ?>–<?php echo $attEndRec; ?> of
-                <?php echo (int) $totalEmployees; ?></div>
+                <?php echo (int) $totalEmployees; ?>
+            </div>
             <div class="d-flex align-items-center gap-2">
                 <label class="small text-muted mb-0">Rows:</label>
                 <select id="attendancePerPageFooter" class="form-select form-select-sm" style="width:80px;">

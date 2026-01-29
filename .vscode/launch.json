@@ -29,7 +29,7 @@
             "type": "dart",
             "args": [
                 "--target=lib/main.dart",
-                "--dart-define=API_BASE_URL=http://192.168.1.119:8080/attendance/attendance_api/"
+                "--dart-define=API_BASE_URL=http://192.168.1.121:8080/attendance/attendance_api/"
             ]
         },
         {

@@ -16,6 +16,7 @@ import '../widgets/fade_slide_transition.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:geolocator/geolocator.dart';
 import '../services/geofence_service.dart';
+import '../services/native_geofence_service.dart';
 
 class AttendanceScreen extends StatefulWidget {
   const AttendanceScreen({super.key});
@@ -33,6 +34,7 @@ class _AttendanceScreenState extends State<AttendanceScreen>
   bool isClockedIn = false;
   String? lastClockIn;
   String? lastClockOut;
+  String? firstClockIn;
   late AnimationController _progressController;
   Animation<double>? _progressAnimation;
   double _progress = 0.0;
@@ -41,6 +43,8 @@ class _AttendanceScreenState extends State<AttendanceScreen>
   TimeOfDay shiftEnd = const TimeOfDay(hour: 18, minute: 0);
   String shiftName = '';
   String workingFrom = '';
+  String weekOffDays = '';
+  String holiday = '';
 
   final GlobalKey _shiftInfoKey = GlobalKey();
   OverlayEntry? _shiftOverlayEntry;
@@ -48,16 +52,24 @@ class _AttendanceScreenState extends State<AttendanceScreen>
   List<WishUser> _wishUsers = [];
   bool _wishesLoading = true;
   bool _isOffline = false;
+  bool _pageLoading = true;
+  Map<String, dynamic> _weeklyLog = {};
   late StreamSubscription<List<ConnectivityResult>> _connectivitySubscription;
   StreamSubscription? _geofenceSubscription;
   StreamSubscription? _geofenceStatusSubscription;
   String _autoAttendanceStatus = 'initializing';
+  Timer? _uiUpdateTimer;
+  String _workingDuration = '0h 0m';
+  double _lateProgress = 0.0;
+  double _breakProgress = 0.0;
+  int _todayEffectiveMinutes = 0;
+  int _todayBreakMinutes = 0;
+  DateTime? _lastDashboardLoad;
 
   @override
   void initState() {
     super.initState();
-    _loadUserData();
-    _fetchWishes();
+    _initialLoad();
     _progressController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 800),
@@ -76,10 +88,11 @@ class _AttendanceScreenState extends State<AttendanceScreen>
       event,
     ) {
       if (mounted) {
-        _loadAttendanceToday();
+        _loadDashboardData();
       }
     });
 
+    _autoAttendanceStatus = AppGeofenceService().currentStatus;
     _geofenceStatusSubscription = AppGeofenceService.serviceStatus.listen((
       status,
     ) {
@@ -88,6 +101,10 @@ class _AttendanceScreenState extends State<AttendanceScreen>
           _autoAttendanceStatus = status;
         });
       }
+    });
+
+    _uiUpdateTimer = Timer.periodic(const Duration(minutes: 1), (timer) {
+      if (mounted) _calculateWorkingTime();
     });
   }
 
@@ -104,78 +121,263 @@ class _AttendanceScreenState extends State<AttendanceScreen>
       });
       if (!_isOffline) {
         // Re-fetch data if connection restored
-        _fetchWishes();
-        _loadShiftDetails();
+        _loadDashboardData();
       }
     }
   }
 
-  Future<void> _fetchWishes() async {
-    setState(() {
-      _wishesLoading = true;
-    });
-    final list = <WishUser>[];
-    try {
-      final res = await ClockService.getWishes(
-        baseUri: kBaseUri,
-        days: 7,
-        timeout: const Duration(seconds: 10),
-      );
-      if (res['success'] == true && res['data'] is List) {
-        for (final item in (res['data'] as List)) {
-          if (item is Map) {
-            final name = (item['name'] ?? '').toString();
-            final years = item['years'] != null
-                ? '${item['years']} YRS'
-                : '1 YRS';
-            final date = item['date'] is String
-                ? DateTime.tryParse(item['date'])
-                : null;
-            final dateLabel = date != null
-                ? '${date.day.toString().padLeft(2, '0')} ${_shortMonth(date.month)}'
-                : (item['date']?.toString() ?? '');
-            // map server type string to WishType
-            final typeStr = (item['type'] ?? '').toString().toLowerCase();
-            var wtype = WishType.birthday;
-            if (typeStr.contains('anniv') || typeStr.contains('anniversary')) {
-              // If years == 0, this indicates the employee joined in the current year
-              // and should be treated as a new joiner rather than an anniversary.
-              int yearsNum = -1;
-              if (item['years'] is num) {
-                yearsNum = (item['years'] as num).toInt();
-              } else if (item['years'] is String) {
-                yearsNum = int.tryParse(item['years'] as String) ?? -1;
-              }
-              if (yearsNum == 0) {
-                wtype = WishType.newJoin;
-              } else {
-                wtype = WishType.anniversary;
-              }
-            } else if (typeStr.contains('join') || typeStr.contains('new')) {
-              wtype = WishType.newJoin;
-            } else if (typeStr.contains('birth') || typeStr.contains('bday')) {
-              wtype = WishType.birthday;
-            }
-            list.add(
-              WishUser(
-                name: name,
-                photo: item['photo']?.toString(),
-                years: years,
-                date: dateLabel,
-                type: wtype,
-              ),
-            );
-          }
-        }
-      }
-    } catch (_) {
-      // ignore; we will show retry or empty state
-    } finally {
-      if (mounted)
+  Future<void> _initialLoad() async {
+    final prefs = await SharedPreferences.getInstance();
+    userName = prefs.getString('user_name') ?? 'User';
+    userId = prefs.getInt('employee_id') ?? prefs.getInt('user_id') ?? 0;
+
+    if (userId! > 0) {
+      await _loadDashboardData();
+    } else {
+      setState(() => _pageLoading = false);
+    }
+  }
+
+  Future<void> _loadDashboardData() async {
+    if (userId == null || userId == 0) return;
+    final prefs = await SharedPreferences.getInstance();
+
+    final now = DateTime.now();
+    final dateStr =
+        "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
+
+    final res = await ClockService.getDashboardData(
+      baseUri: kBaseUri,
+      userId: userId!,
+      date: dateStr,
+    );
+
+    if (mounted) {
+      if (res['success'] == true) {
+        final data = res['data'];
+        final shift = data['shift'];
+        final attendance = data['attendance'];
+        final wishes = data['wishes'];
+
         setState(() {
-          _wishUsers = list;
+          // 1. Process Shift
+          if (shift != null) {
+            shiftName = shift['name'] ?? '';
+            workingFrom = shift['working_from'] ?? '';
+            weekOffDays = shift['weekoff_days'] ?? '';
+            holiday = shift['holiday'] ?? '';
+            try {
+              final sParts = (shift['start'] as String).split(':');
+              final eParts = (shift['end'] as String).split(':');
+              if (sParts.length >= 2) {
+                shiftStart = TimeOfDay(
+                  hour: int.parse(sParts[0]),
+                  minute: int.parse(sParts[1]),
+                );
+              }
+              if (eParts.length >= 2) {
+                shiftEnd = TimeOfDay(
+                  hour: int.parse(eParts[0]),
+                  minute: int.parse(eParts[1]),
+                );
+              }
+            } catch (_) {}
+          }
+
+          // 2. Process Attendance
+          if (attendance != null) {
+            isClockedIn = (attendance['last_punch_type'] == 'in');
+
+            String? formatTimeString(String? timeStr) {
+              if (timeStr == null) return null;
+              final parts = timeStr.split(':');
+              if (parts.length >= 2) {
+                final h = int.tryParse(parts[0]) ?? 0;
+                final m = int.tryParse(parts[1]) ?? 0;
+                return TimeOfDay(hour: h, minute: m).format(context);
+              }
+              return timeStr;
+            }
+
+            lastClockIn = formatTimeString(attendance['clock_in']);
+            lastClockOut = formatTimeString(attendance['clock_out']);
+            firstClockIn = formatTimeString(attendance['first_clock_in']);
+            _todayEffectiveMinutes = attendance['effective_minutes'] ?? 0;
+            _todayBreakMinutes = attendance['break_minutes'] ?? 0;
+          }
+
+          // 3. Process Wishes
+          final wishList = <WishUser>[];
+          if (wishes is List) {
+            for (final item in wishes) {
+              final typeStr = (item['type'] ?? '').toString().toLowerCase();
+              var wtype = WishType.birthday;
+              if (typeStr.contains('anniv')) {
+                wtype = (item['years'] == 0)
+                    ? WishType.newJoin
+                    : WishType.anniversary;
+              } else if (typeStr.contains('join')) {
+                wtype = WishType.newJoin;
+              }
+
+              final date = item['date'] is String
+                  ? DateTime.tryParse(item['date'])
+                  : null;
+              final dateLabel = date != null
+                  ? '${date.day.toString().padLeft(2, '0')} ${_shortMonth(date.month)}'
+                  : '';
+
+              wishList.add(
+                WishUser(
+                  name: item['name'] ?? '',
+                  photo: null,
+                  years: item['years'] != null ? '${item['years']} YRS' : '',
+                  date: dateLabel,
+                  type: wtype,
+                ),
+              );
+            }
+          }
+          _wishUsers = wishList;
+          _weeklyLog = data['weekly_log'] is Map ? data['weekly_log'] : {};
           _wishesLoading = false;
+          _pageLoading = false;
+          _lastDashboardLoad = DateTime.now();
         });
+
+        // Persist for Native side
+        if (attendance != null) {
+          prefs.setString(
+            'last_punch_type',
+            attendance['last_punch_type'] ?? '',
+          );
+        }
+        _calculateWorkingTime();
+      } else {
+        setState(() => _pageLoading = false);
+      }
+    }
+  }
+
+  bool _isWeekOffToday() {
+    if (weekOffDays.isEmpty) return false;
+    final List<String> days = weekOffDays
+        .split(',')
+        .map((e) => e.trim().toLowerCase())
+        .toList();
+    final today = DateTime.now().weekday; // 1 (Mon) to 7 (Sun)
+    const weekdayNames = [
+      'monday',
+      'tuesday',
+      'wednesday',
+      'thursday',
+      'friday',
+      'saturday',
+      'sunday',
+    ];
+    final todayName = weekdayNames[today - 1];
+    return days.contains(todayName);
+  }
+
+  void _calculateWorkingTime() {
+    if (lastClockIn == null || lastClockIn == 'Missing') {
+      setState(() {
+        _workingDuration = '0h 0m';
+        _progress = 0.0;
+        _lateProgress = 0.0;
+        _breakProgress = 0.0;
+        _progressAnimation = AlwaysStoppedAnimation(0.0);
+      });
+      return;
+    }
+    try {
+      // 1. Parse First Clock In Time (for Late Mark)
+      final format = RegExp(r'(\d+):(\d+)\s*(AM|PM)?');
+      final firstInStr = firstClockIn ?? lastClockIn!;
+      final match = format.firstMatch(firstInStr);
+      if (match == null) return;
+
+      int hour = int.parse(match.group(1)!);
+      int minute = int.parse(match.group(2)!);
+      final amPm = match.group(3);
+
+      if (amPm == 'PM' && hour < 12) hour += 12;
+      if (amPm == 'AM' && hour == 12) hour = 0;
+
+      final now = DateTime.now();
+      final firstClockInDate = DateTime(
+        now.year,
+        now.month,
+        now.day,
+        hour,
+        minute,
+      );
+
+      final shiftStartDate = DateTime(
+        now.year,
+        now.month,
+        now.day,
+        shiftStart.hour,
+        shiftStart.minute,
+      );
+      final shiftTotalMinutes =
+          (shiftEnd.hour * 60 + shiftEnd.minute) -
+          (shiftStart.hour * 60 + shiftStart.minute);
+
+      if (shiftTotalMinutes <= 0) {
+        setState(() {
+          _progress = 0.0;
+          _lateProgress = 0.0;
+          _breakProgress = 0.0;
+        });
+        return;
+      }
+
+      double lateProg = 0.0;
+      if (firstClockInDate.isAfter(shiftStartDate)) {
+        final lateMinutes = firstClockInDate
+            .difference(shiftStartDate)
+            .inMinutes;
+        lateProg = (lateMinutes / shiftTotalMinutes).clamp(0.0, 1.0);
+      }
+
+      setState(() {
+        int displayMinutes = _todayEffectiveMinutes;
+        if (isClockedIn && _lastDashboardLoad != null) {
+          final extra = DateTime.now()
+              .difference(_lastDashboardLoad!)
+              .inMinutes;
+          displayMinutes += extra;
+        }
+
+        _workingDuration =
+            '${(displayMinutes ~/ 60).abs()}h ${(displayMinutes % 60).abs()}m';
+
+        final double targetProgress = (displayMinutes / shiftTotalMinutes)
+            .clamp(0.0, 1.0);
+        _breakProgress = (_todayBreakMinutes / shiftTotalMinutes).clamp(
+          0.0,
+          1.0,
+        );
+        _lateProgress = lateProg.clamp(0.0, 1.0);
+
+        // Restore smooth animation
+        if (_progress != targetProgress) {
+          _progressAnimation =
+              Tween<double>(begin: _progress, end: targetProgress).animate(
+                CurvedAnimation(
+                  parent: _progressController,
+                  curve: Curves.easeOut,
+                ),
+              );
+          _progress = targetProgress;
+          _progressController.forward(from: 0.0);
+        } else if (_progressAnimation == null) {
+          _progressAnimation = AlwaysStoppedAnimation(_progress);
+        }
+      });
+    } catch (e) {
+      // ignore
     }
   }
 
@@ -199,6 +401,7 @@ class _AttendanceScreenState extends State<AttendanceScreen>
 
   @override
   void dispose() {
+    _uiUpdateTimer?.cancel();
     _progressController.dispose();
     try {
       _shiftHideTimer?.cancel();
@@ -280,113 +483,20 @@ class _AttendanceScreenState extends State<AttendanceScreen>
     }
   }
 
-  Future<void> _loadUserData() async {
-    final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      userName = prefs.getString('user_name') ?? 'Sachin Mandal';
-      // Reverted: Prefer the stored employee id (DB PK) if available.
-      // clock.php now handles the resolution correctly, so we should send the most specific ID we have.
-      userId = prefs.getInt('employee_id') ?? prefs.getInt('user_id') ?? 0;
-    });
-    // load shift details after we have user id
-    _loadShiftDetails();
-  }
-
-  Future<void> _loadShiftDetails() async {
-    // Re-read SharedPreferences to get the freshest employee_id (avoid stale state).
-    final prefs = await SharedPreferences.getInstance();
-    final prefEmployeeId =
-        prefs.getInt('employee_id') ?? prefs.getInt('user_id') ?? 0;
-    // (production) do not log prefs
-    if (prefEmployeeId <= 0) return;
-    // Ensure local state reflects the persisted id
-    setState(() {
-      userId = prefEmployeeId;
-    });
-
-    final info = await ClockService.getUserShift(
-      baseUri: kBaseUri,
-      userId: prefEmployeeId,
-    );
-    if (!mounted) return;
-    // do not store raw response in production
-
-    if (info.success) {
-      setState(() {
-        shiftName = info.name.isNotEmpty ? info.name : shiftName;
-        workingFrom = info.workingFrom.isNotEmpty
-            ? info.workingFrom
-            : workingFrom;
-        // parse start/end strings (expecting HH:mm or HH:mm:ss)
-        try {
-          final sParts = info.start.split(':');
-          final eParts = info.end.split(':');
-          if (sParts.length >= 2) {
-            final sh = int.tryParse(sParts[0]) ?? shiftStart.hour;
-            final sm = int.tryParse(sParts[1]) ?? shiftStart.minute;
-            shiftStart = TimeOfDay(hour: sh, minute: sm);
-          }
-          if (eParts.length >= 2) {
-            final eh = int.tryParse(eParts[0]) ?? shiftEnd.hour;
-            final em = int.tryParse(eParts[1]) ?? shiftEnd.minute;
-            shiftEnd = TimeOfDay(hour: eh, minute: em);
-          }
-        } catch (_) {}
-      });
-    }
-    // load today's punch status
-    _loadAttendanceToday();
-  }
-
-  Future<void> _loadAttendanceToday() async {
-    if (userId == null || userId == 0) return;
-
-    final now = DateTime.now();
-    final dateStr =
-        "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
-
-    final res = await ClockService.getDayAttendance(
-      baseUri: kBaseUri,
-      userId: userId!,
-      date: dateStr,
-    );
-
-    if (mounted && res['success'] == true) {
-      setState(() {
-        isClockedIn = (res['last_punch_type'] == 'in');
-
-        // Helper to format HH:MM from API to local time format
-        String? formatTimeString(String? timeStr) {
-          if (timeStr == null) return null;
-          final parts = timeStr.split(':');
-          if (parts.length >= 2) {
-            final h = int.tryParse(parts[0]) ?? 0;
-            final m = int.tryParse(parts[1]) ?? 0;
-            return TimeOfDay(hour: h, minute: m).format(context);
-          }
-          return timeStr;
-        }
-
-        lastClockIn = formatTimeString(res['clock_in']);
-        lastClockOut = formatTimeString(res['clock_out']);
-
-        // Update progress based on clocked status
-        if (!isClockedIn && lastClockOut != null) {
-          _progress = 1.0;
-          _progressAnimation = AlwaysStoppedAnimation(_progress);
-          _progressController.value = 1.0;
-        } else if (isClockedIn) {
-          _progress = 0.0;
-          _progressAnimation = AlwaysStoppedAnimation(_progress);
-          _progressController.reset();
-        }
-      });
-    }
-  }
-
   Future<void> _clockInOut({required String type}) async {
     if (userId == null || userId == 0) {
       BottomBanner.show(context, 'User not found.', success: false);
+      return;
+    }
+
+    // Step 0: Check for automatic time setting
+    final isAutoTime = await NativeGeofenceService().isAutoTimeEnabled();
+    if (!isAutoTime) {
+      BottomBanner.show(
+        context,
+        'Please enable "Automatic Date & Time" in your phone settings to clock in/out.',
+        success: false,
+      );
       return;
     }
 
@@ -476,11 +586,33 @@ class _AttendanceScreenState extends State<AttendanceScreen>
     if (result.success) {
       setState(() {
         isClockedIn = result.isClockedIn;
-        // update displayed times locally
-        if (type == 'in') {
-          lastClockIn = TimeOfDay.fromDateTime(now).format(context);
-        } else if (type == 'out') {
-          lastClockOut = TimeOfDay.fromDateTime(now).format(context);
+        // update displayed times locally using server time if available
+        if (result.serverTime != null) {
+          try {
+            final parsedTime = DateTime.parse(result.serverTime!);
+            final formatted = TimeOfDay.fromDateTime(
+              parsedTime,
+            ).format(context);
+            if (type == 'in') {
+              lastClockIn = formatted;
+            } else if (type == 'out') {
+              lastClockOut = formatted;
+            }
+          } catch (e) {
+            // fallback to local time only if parsing fails
+            if (type == 'in') {
+              lastClockIn = TimeOfDay.fromDateTime(now).format(context);
+            } else if (type == 'out') {
+              lastClockOut = TimeOfDay.fromDateTime(now).format(context);
+            }
+          }
+        } else {
+          // fallback to local time
+          if (type == 'in') {
+            lastClockIn = TimeOfDay.fromDateTime(now).format(context);
+          } else if (type == 'out') {
+            lastClockOut = TimeOfDay.fromDateTime(now).format(context);
+          }
         }
       });
     }
@@ -508,6 +640,13 @@ class _AttendanceScreenState extends State<AttendanceScreen>
     setState(() {
       isLoading = false;
     });
+
+    if (result.success) {
+      await NativeGeofenceService().updateNextAllowedStart(
+        result.nextAllowedStart,
+      );
+      await _loadDashboardData();
+    }
   }
 
   /// Show dialog to register this device
@@ -614,67 +753,77 @@ class _AttendanceScreenState extends State<AttendanceScreen>
   }
 
   Future<void> _handleRefresh() async {
-    await Future.wait([
-      _fetchWishes(),
-      _loadShiftDetails(),
-      // The WeeklyLogCard handles its own internal state,
-      // but we could trigger a rebuild or use a key if needed.
-    ]);
+    await _loadDashboardData();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FA),
-      body: SafeArea(
-        child: RefreshIndicator(
-          onRefresh: _handleRefresh,
-          child: SingleChildScrollView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                FadeSlideTransition(
-                  delay: const Duration(milliseconds: 0),
-                  child: _buildGreetingSection(),
-                ),
-                const SizedBox(height: 16),
-                FadeSlideTransition(
-                  delay: const Duration(milliseconds: 100),
-                  child: _buildShiftCard(),
-                ),
-                if (_autoAttendanceStatus ==
-                        'BACKGROUND_PERMISSION_NEED_MANUAL' ||
-                    _autoAttendanceStatus == 'permission_denied')
-                  Padding(
-                    padding: const EdgeInsets.only(top: 16),
-                    child: _buildPermissionGuide(),
+      body: _pageLoading
+          ? const Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 16),
+                  Text(
+                    'Loading your dashboard...',
+                    style: TextStyle(color: Colors.grey, fontSize: 13),
                   ),
-                const SizedBox(height: 16),
-                FadeSlideTransition(
-                  delay: const Duration(milliseconds: 200),
-                  child: _buildActionButtons(),
-                ),
-                const SizedBox(height: 16),
-                FadeSlideTransition(
-                  delay: const Duration(milliseconds: 300),
-                  child: _buildWishesSection(),
-                ),
-                const SizedBox(height: 16),
-                FadeSlideTransition(
-                  delay: const Duration(milliseconds: 400),
-                  child: WeeklyLogCard(
-                    key: UniqueKey(), // Force refresh log card on pull
-                    userId: userId ?? 0,
-                    baseUri: kBaseUri,
+                ],
+              ),
+            )
+          : SafeArea(
+              child: RefreshIndicator(
+                onRefresh: _handleRefresh,
+                child: SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      FadeSlideTransition(
+                        delay: const Duration(milliseconds: 0),
+                        child: _buildGreetingSection(),
+                      ),
+                      const SizedBox(height: 16),
+                      FadeSlideTransition(
+                        delay: const Duration(milliseconds: 100),
+                        child: _buildShiftCard(),
+                      ),
+                      if (_autoAttendanceStatus ==
+                              'BACKGROUND_PERMISSION_NEED_MANUAL' ||
+                          _autoAttendanceStatus == 'permission_denied')
+                        Padding(
+                          padding: const EdgeInsets.only(top: 16),
+                          child: _buildPermissionGuide(),
+                        ),
+                      const SizedBox(height: 16),
+                      FadeSlideTransition(
+                        delay: const Duration(milliseconds: 200),
+                        child: _buildActionButtons(),
+                      ),
+                      const SizedBox(height: 16),
+                      FadeSlideTransition(
+                        delay: const Duration(milliseconds: 300),
+                        child: _buildWishesSection(),
+                      ),
+                      const SizedBox(height: 16),
+                      FadeSlideTransition(
+                        delay: const Duration(milliseconds: 400),
+                        child: WeeklyLogCard(
+                          key: UniqueKey(), // Force refresh log card on pull
+                          userId: userId ?? 0,
+                          baseUri: kBaseUri,
+                          preloadedData: _weeklyLog,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ],
+              ),
             ),
-          ),
-        ),
-      ),
     );
   }
 
@@ -761,9 +910,12 @@ class _AttendanceScreenState extends State<AttendanceScreen>
         icon = Icons.settings;
         break;
       case 'disabled_by_admin':
-        color = Colors.grey;
-        label = 'Auto-Attendance: Disabled';
-        icon = Icons.block;
+      case 'disabled_by_user':
+        return const SizedBox.shrink();
+      case 'location_services_disabled':
+        color = Colors.red;
+        label = 'Auto-Attendance: Location Off';
+        icon = Icons.location_disabled;
         break;
       case 'requesting_permissions':
       case 'starting_service':
@@ -898,7 +1050,6 @@ class _AttendanceScreenState extends State<AttendanceScreen>
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              // Compact SHIFT TODAY with tappable info icon (no extra padding)
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 0),
                 child: Row(
@@ -921,9 +1072,7 @@ class _AttendanceScreenState extends State<AttendanceScreen>
                       behavior: HitTestBehavior.opaque,
                       onTap: _showShiftDetails,
                       child: const Padding(
-                        padding: EdgeInsets.all(
-                          4.0,
-                        ), // small touch target without extra visual spacing
+                        padding: EdgeInsets.all(4.0),
                         child: Icon(
                           Icons.info_outline,
                           size: 16,
@@ -1017,7 +1166,11 @@ class _AttendanceScreenState extends State<AttendanceScreen>
                       width: double.infinity,
                       height: 42,
                       child: ElevatedButton(
-                        onPressed: (isLoading || _isOffline)
+                        onPressed:
+                            (isLoading ||
+                                _isOffline ||
+                                ((_isWeekOffToday() || holiday.isNotEmpty) &&
+                                    !isClockedIn))
                             ? null
                             : () =>
                                   _clockInOut(type: isClockedIn ? 'out' : 'in'),
@@ -1042,11 +1195,17 @@ class _AttendanceScreenState extends State<AttendanceScreen>
                             : Text(
                                 _isOffline
                                     ? 'Offline'
-                                    : (isClockedIn ? 'Clock Out' : 'Clock In'),
+                                    : (_isWeekOffToday() && !isClockedIn
+                                          ? 'Week Off'
+                                          : (holiday.isNotEmpty && !isClockedIn
+                                                ? 'Holiday'
+                                                : (isClockedIn
+                                                      ? 'Clock Out'
+                                                      : 'Clock In'))),
                                 style: const TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600,
                                   color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
                                 ),
                               ),
                       ),
@@ -1054,7 +1213,6 @@ class _AttendanceScreenState extends State<AttendanceScreen>
                   ],
                 ),
               ),
-
               const SizedBox(width: 8),
               GestureDetector(
                 onTap: () {
@@ -1255,17 +1413,21 @@ class _AttendanceScreenState extends State<AttendanceScreen>
             size: const Size(110, 110),
             painter: CircularProgressPainter(
               progress: progressValue,
-              backgroundColor: const Color(0xFFE0E0E0),
+              lateProgress: _lateProgress,
+              breakProgress: _breakProgress,
+              backgroundColor: const Color(0xFFF0F2F5),
               progressColor: const Color(0xFF7C6FE8),
+              lateColor: Colors.amber,
+              breakColor: Colors.red[300]!,
               strokeWidth: 12.0,
             ),
           ),
           Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Text(
-                '0h 0m',
-                style: TextStyle(
+              Text(
+                _workingDuration,
+                style: const TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 16,
                   color: Colors.black,
@@ -1455,14 +1617,22 @@ class _AttendanceScreenState extends State<AttendanceScreen>
 
 class CircularProgressPainter extends CustomPainter {
   final double progress;
+  final double lateProgress;
+  final double breakProgress;
   final Color backgroundColor;
   final Color progressColor;
+  final Color lateColor;
+  final Color breakColor;
   final double strokeWidth;
 
   CircularProgressPainter({
     required this.progress,
+    required this.lateProgress,
+    required this.breakProgress,
     required this.backgroundColor,
     required this.progressColor,
+    required this.lateColor,
+    required this.breakColor,
     this.strokeWidth = 8.0,
   });
 
@@ -1470,6 +1640,10 @@ class CircularProgressPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final center = Offset(size.width / 2, size.height / 2);
     final radius = size.width / 2;
+    final rect = Rect.fromCircle(
+      center: center,
+      radius: radius - strokeWidth / 2,
+    );
 
     // Background circle
     final backgroundPaint = Paint()
@@ -1480,27 +1654,58 @@ class CircularProgressPainter extends CustomPainter {
 
     canvas.drawCircle(center, radius - strokeWidth / 2, backgroundPaint);
 
-    // Progress arc
+    final startAngle = -math.pi / 2;
+
+    // 1. Late arc (if any)
+    if (lateProgress > 0) {
+      final latePaint = Paint()
+        ..color = lateColor
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = strokeWidth
+        ..strokeCap = StrokeCap.butt;
+      final lateSweepAngle = 2 * math.pi * lateProgress;
+      canvas.drawArc(rect, startAngle, lateSweepAngle, false, latePaint);
+    }
+
+    // 2. Break arc (Idle)
+    if (breakProgress > 0) {
+      final breakPaint = Paint()
+        ..color = breakColor
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = strokeWidth
+        ..strokeCap = StrokeCap.butt;
+      final breakStartAngle =
+          startAngle + (2 * math.pi * lateProgress) + (2 * math.pi * progress);
+      final breakSweepAngle = 2 * math.pi * breakProgress;
+      canvas.drawArc(rect, breakStartAngle, breakSweepAngle, false, breakPaint);
+    }
+
+    // 3. Progress arc (Worked)
     final progressPaint = Paint()
       ..color = progressColor
       ..style = PaintingStyle.stroke
       ..strokeWidth = strokeWidth
       ..strokeCap = StrokeCap.butt;
 
-    final startAngle = -math.pi / 2;
-    final sweepAngle = 2 * math.pi * progress;
+    final progressStartAngle = startAngle + (2 * math.pi * lateProgress);
+    final progressSweepAngle = 2 * math.pi * progress;
 
-    canvas.drawArc(
-      Rect.fromCircle(center: center, radius: radius - strokeWidth / 2),
-      startAngle,
-      sweepAngle,
-      false,
-      progressPaint,
-    );
+    if (progressSweepAngle > 0.05) {
+      // Only draw if visible
+      canvas.drawArc(
+        rect,
+        progressStartAngle,
+        progressSweepAngle,
+        false,
+        progressPaint,
+      );
+    }
   }
 
   @override
   bool shouldRepaint(CircularProgressPainter oldDelegate) {
-    return oldDelegate.progress != progress;
+    return oldDelegate.progress != progress ||
+        oldDelegate.lateProgress != lateProgress ||
+        oldDelegate.breakProgress != breakProgress;
   }
 }

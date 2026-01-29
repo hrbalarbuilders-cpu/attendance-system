@@ -25,7 +25,7 @@ class GeofenceManager(private val context: Context) {
     }
 
     @SuppressLint("MissingPermission")
-    fun startGeofence(id: String, lat: Double, lng: Double, radius: Float) {
+    fun startGeofence(id: String, lat: Double, lng: Double, radius: Float, polygon: String) {
         // Persist fence details for BootReceiver
         val prefs = context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
         prefs.edit().apply {
@@ -33,6 +33,7 @@ class GeofenceManager(private val context: Context) {
             putFloat("flutter.fence_lat", lat.toFloat())
             putFloat("flutter.fence_lng", lng.toFloat())
             putFloat("flutter.fence_radius", radius)
+            putString("flutter.fence_polygon", polygon)
             apply()
         }
 
@@ -67,9 +68,10 @@ class GeofenceManager(private val context: Context) {
         val radius = prefs.getFloat("flutter.fence_radius", 0.0f)
 
         if (id != null && lat != 0.0 && lng != 0.0 && radius > 0) {
+            val polygon = prefs.getString("flutter.fence_polygon", "") ?: ""
             Log.d(TAG, "Re-registering persisted geofence: $id with INITIAL_TRIGGER_ENTER")
             // This calls startGeofence, which sets INITIAL_TRIGGER_ENTER in the request builder
-            startGeofence(id, lat, lng, radius)
+            startGeofence(id, lat, lng, radius, polygon)
         } else {
             Log.d(TAG, "No persisted geofence found to re-register")
         }

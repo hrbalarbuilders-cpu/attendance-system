@@ -11,8 +11,8 @@ header('Access-Control-Allow-Methods: GET');
 include "db.php";
 
 try {
-    // Fetch all active geo-fence locations
-    $query = "SELECT id, location_group, location_name, latitude, longitude, radius_meters 
+    // Fetch all active geo-fence locations including polygon
+    $query = "SELECT id, location_group, location_name, latitude, longitude, radius_meters, geofence_polygon 
               FROM geo_settings 
               WHERE is_active = 1 
               ORDER BY location_group ASC, location_name ASC";
@@ -30,6 +30,7 @@ try {
                 'lat' => floatval($row['latitude']),
                 'lng' => floatval($row['longitude']),
                 'radius' => floatval($row['radius_meters'] ?? 100),
+                'polygon' => $row['geofence_polygon'] ?? null
             ];
         }
 

@@ -7,18 +7,18 @@ ob_start();
 // ========================================
 
 // Database host - Alwaysdata
-$host = "localhost";
+$host = "mysql-demoserver.alwaysdata.net";
 
 // Alwaysdata database username
 // ⚠️ CHECK "USERS" TAB IN ALWAYSDATA DASHBOARD FOR THIS
-$user = "root";
+$user = "demoserver";
 
 // Alwaysdata database password
 // ⚠️ THE PASSWORD YOU SET FOR THE DB USER
-$pass = "";
+$pass = "Manyooooh199";
 
 // Alwaysdata database name
-$db = "attendance_db";
+$db = "demoserver_attendance";
 
 // ========================================
 // CREATE DATABASE CONNECTION

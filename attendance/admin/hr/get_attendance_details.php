@@ -45,7 +45,7 @@ $startDateTime = $date . ' 00:00:00';
 $endDateTime = $date . ' 23:59:59';
 
 $logStmt = $con->prepare("
-    SELECT time, type, working_from, reason 
+    SELECT id, time, type, working_from, reason, latitude, longitude 
     FROM attendance_logs 
     WHERE user_id = ? AND time BETWEEN ? AND ?
     ORDER BY time ASC
@@ -57,10 +57,13 @@ $logResult = $logStmt->get_result();
 $logs = [];
 while ($log = $logResult->fetch_assoc()) {
     $logs[] = [
+        'id' => $log['id'],
         'time' => $log['time'],
         'type' => $log['type'],
         'working_from' => $log['working_from'],
-        'reason' => $log['reason']
+        'reason' => $log['reason'],
+        'lat' => $log['latitude'],
+        'lng' => $log['longitude']
     ];
 }
 
@@ -70,6 +73,8 @@ if (!empty($employee['shift_start_time']) && !empty($employee['shift_end_time'])
     $shift = [
         'start_time' => date('h:i A', strtotime($employee['shift_start_time'])),
         'end_time' => date('h:i A', strtotime($employee['shift_end_time'])),
+        'start_time_raw' => $employee['shift_start_time'],
+        'end_time_raw' => $employee['shift_end_time'],
         'late_mark_after' => isset($employee['shift_late_mark_after']) ? (int) $employee['shift_late_mark_after'] : 0,
         'lunch_start' => !empty($employee['shift_lunch_start']) ? date('h:i A', strtotime($employee['shift_lunch_start'])) : null,
         'lunch_end' => !empty($employee['shift_lunch_end']) ? date('h:i A', strtotime($employee['shift_lunch_end'])) : null,
