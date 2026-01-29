@@ -342,6 +342,34 @@ class GeofenceForegroundService : Service(), LocationListener {
                 return@thread
             }
 
+            // SAFELY RETRIEVE USER ID (Handle Int vs Long mismatch)
+            // Flutter SharedPreferences might save it as Int, but we previously tried getLong which causes ClassCastException
+            var userId = 0
+            try {
+                 // Try getting as Int first (common Flutter default for numbers)
+                 userId = prefs.getInt("flutter.user_id", 0)
+                 if (userId == 0) {
+                      // Try getting as Long if Int failed or was 0
+                      userId = prefs.getLong("flutter.user_id", 0L).toInt()
+                 }
+            } catch (e: Exception) {
+                 Log.e(TAG, "Error parsing user_id from prefs: ${e.message}")
+                 try {
+                     // Fallback: If it was indeed a Long but getInt crashed, try getLong directly here
+                     userId = prefs.getLong("flutter.user_id", 0L).toInt()
+                 } catch (e2: Exception) {
+                     Log.e(TAG, "Fatal: Could not retrieve user_id. Service implementation error.")
+                 }
+            }
+
+            Log.d(TAG, "Retrieved Native UserID: $userId")
+            
+            if (userId <= 0 || baseUrl.isEmpty()) {
+                Log.e(TAG, "Missing user_id ($userId) or api_base_url.")
+                updateNotification("Error: Please re-login")
+                return@thread
+            }
+
             try {
                 val url = URL("${baseUrl}clock.php")
                 val conn = url.openConnection() as HttpURLConnection
