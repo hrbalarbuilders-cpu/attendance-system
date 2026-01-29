@@ -1,4 +1,5 @@
 <?php
+include '../includes/auth_check.php';
 // employees.php (MPA mode)
 date_default_timezone_set('Asia/Kolkata');
 include '../config/db.php';

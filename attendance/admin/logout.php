@@ -8,6 +8,10 @@ $_SESSION = array();
 session_destroy();
 
 // Redirect to login page
-header("Location: login.php");
+echo "<script>
+    localStorage.removeItem('admin_logged_in');
+    localStorage.setItem('admin_logged_out', Date.now());
+    window.location.href = 'login.php';
+</script>";
 exit;
 ?>

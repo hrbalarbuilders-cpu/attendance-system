@@ -1,12 +1,6 @@
 <?php
-session_start();
+include '../includes/auth_check.php';
 date_default_timezone_set('Asia/Kolkata');
-
-// Check if user is logged in
-if (!isset($_SESSION['emp_id']) || $_SESSION['emp_id'] <= 0) {
-  header('Location: ../login.php');
-  exit;
-}
 
 include '../config/db.php';
 include '../includes/header.php';
@@ -474,7 +468,8 @@ $currentDate = date('Y-m-d');
       <div class="stat-card">
         <div class="label">Working From</div>
         <div class="value">
-          <?php echo $todayClockIn ? htmlspecialchars($todayClockIn['working_from'] ?? 'Office') : '--'; ?></div>
+          <?php echo $todayClockIn ? htmlspecialchars($todayClockIn['working_from'] ?? 'Office') : '--'; ?>
+        </div>
       </div>
     </div>
 
@@ -498,7 +493,8 @@ $currentDate = date('Y-m-d');
             <div class="activity-info">
               <div class="type">Clock <?php echo ucfirst($act['type']); ?></div>
               <div class="meta"><?php echo htmlspecialchars($act['working_from'] ?? 'Office'); ?> •
-                <?php echo htmlspecialchars($act['reason'] ?? 'Shift'); ?></div>
+                <?php echo htmlspecialchars($act['reason'] ?? 'Shift'); ?>
+              </div>
             </div>
             <div class="activity-time"><?php echo date('h:i A', strtotime($act['time'])); ?></div>
           </div>

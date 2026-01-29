@@ -40,8 +40,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
           $_SESSION['emp_code'] = $employee['emp_code'];
           $_SESSION['emp_email'] = $employee['email'];
 
-          // Redirect to dashboard
-          header("Location: dashboard/index.php");
+          // Sync localStorage for multi-tab support and redirect
+          echo "<script>
+            localStorage.setItem('admin_logged_in', Date.now());
+            localStorage.removeItem('admin_logged_out');
+            window.location.href = 'dashboard/index.php';
+          </script>";
           exit;
         } else {
           $error = 'Invalid password. Please try again.';

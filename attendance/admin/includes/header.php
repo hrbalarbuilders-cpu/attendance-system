@@ -589,4 +589,19 @@ if ($adminPos !== false) {
   (function () {
     document.title = 'Demo Software';
   })();
+
+  // Cross-tab authentication sync
+  window.addEventListener('storage', (e) => {
+    if (e.key === 'admin_logged_out') {
+      window.location.href = '<?php echo $base; ?>/login.php';
+    }
+    if (e.key === 'admin_logged_in' && window.location.pathname.includes('login.php')) {
+      window.location.href = '<?php echo $base; ?>/dashboard/index.php';
+    }
+  });
+
+  // Check if we stay or leave based on shared state
+  if (localStorage.getItem('admin_logged_out') && !window.location.pathname.includes('login.php')) {
+    window.location.href = '<?php echo $base; ?>/login.php';
+  }
 </script>
